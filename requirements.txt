@@ -1,0 +1,17 @@
+# Core dependencies
+streamlit>=1.28.0
+pandas>=2.1.0
+
+# Supabase
+supabase>=2.0.0
+
+# Data handling
+openpyxl>=3.1.0
+Pillow>=10.0.0
+
+# PDF processing (optional - not needed for cloud demo)
+# PyPDF2==3.0.1
+# pdfplumber==0.10.3
+
+# AI features (optional)
+# google-generativeai>=0.8.0

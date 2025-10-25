@@ -1,0 +1,16 @@
+{
+  "agents": [
+    {
+      "agent_code": "AG001",
+      "agent_name": "Sample Agent",
+      "phone": "9876543210",
+      "email": "agent@example.com",
+      "branch": "Main Branch"
+    }
+  ],
+  "settings": {
+    "auto_backup": true,
+    "backup_frequency_days": 7,
+    "max_file_size_mb": 50
+  }
+}
