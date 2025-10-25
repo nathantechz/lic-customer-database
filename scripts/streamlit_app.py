@@ -881,76 +881,83 @@ def show_database_stats():
         return
     
     try:
-        # Get counts
+        # Get total counts
         customer_response = supabase.table('customers').select('customer_id', count='exact').execute()
-        customer_count = customer_response.count if customer_response.count is not None else 0
+        total_customers = customer_response.count if customer_response.count is not None else 0
         
         policy_response = supabase.table('policies').select('policy_number', count='exact').execute()
-        policy_count = policy_response.count if policy_response.count is not None else 0
+        total_policies = policy_response.count if policy_response.count is not None else 0
         
-        generic_response = supabase.table('customers').select('customer_id', count='exact').ilike(
-            'customer_name', 'Customer_%'
-        ).execute()
-        generic_names = generic_response.count if generic_response.count is not None else 0
+        # Get agent-wise stats
+        # Get all policies with agent codes
+        policies_response = supabase.table('policies').select('agent_code, customer_id').execute()
+        policies_data = policies_response.data if policies_response.data else []
         
-        real_names = customer_count - generic_names
+        # Count by agent
+        agent_customers = {}
+        agent_policies = {}
         
-        # Get extraction method stats if available
-        try:
-            gemini_response = supabase.table('customers').select('customer_id', count='exact').eq(
-                'extraction_method', 'gemini'
-            ).execute()
-            gemini_count = gemini_response.count if gemini_response.count is not None else 0
+        for policy in policies_data:
+            agent_code = policy.get('agent_code', 'Unknown')
+            if not agent_code:
+                agent_code = 'Unknown'
             
-            regex_response = supabase.table('customers').select('customer_id', count='exact').eq(
-                'extraction_method', 'regex'
-            ).execute()
-            regex_count = regex_response.count if regex_response.count is not None else 0
+            # Count policies
+            if agent_code not in agent_policies:
+                agent_policies[agent_code] = 0
+            agent_policies[agent_code] += 1
             
-            show_sources = True
-        except:
-            gemini_count = regex_count = 0
-            show_sources = False
+            # Count unique customers
+            customer_id = policy.get('customer_id')
+            if customer_id:
+                if agent_code not in agent_customers:
+                    agent_customers[agent_code] = set()
+                agent_customers[agent_code].add(customer_id)
         
-        # Display stats in columns
-        col1, col2, col3, col4 = st.columns(4)
+        # Convert sets to counts
+        for agent_code in agent_customers:
+            agent_customers[agent_code] = len(agent_customers[agent_code])
+        
+        # Display overview stats in a mobile-friendly layout
+        st.markdown("### �� Overview")
+        
+        col1, col2 = st.columns(2)
         
         with col1:
-            st.metric("👥 Total Customers", customer_count)
+            st.metric("👥 Total Customers", total_customers)
         
         with col2:
-            st.metric("📋 Total Policies", policy_count)
+            st.metric("📋 Total Policies", total_policies)
         
-        with col3:
-            st.metric("✅ Real Names", real_names)
+        # Display agent-wise stats
+        st.markdown("### 👥 Agent-wise Breakdown")
         
-        with col4:
-            st.metric("⚠️ Generic Names", generic_names)
+        # Get unique agent codes
+        all_agents = sorted(set(list(agent_customers.keys()) + list(agent_policies.keys())))
         
-        if show_sources:
-            st.write("### 🔍 Extraction Sources")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("🤖 Gemini AI", gemini_count)
-            with col2:
-                st.metric("📝 Regex Pattern", regex_count)
-        
-        # Show percentage of real names
-        if customer_count > 0:
-            real_name_percentage = (real_names / customer_count) * 100
-            st.progress(real_name_percentage / 100, text=f"{real_name_percentage:.1f}% Real Names")
-            
-            if real_name_percentage < 50:
-                st.warning("⚠️ Many customers still have generic names. Consider reprocessing with AI.")
-            elif real_name_percentage > 80:
-                st.success("✅ Most customers have real names extracted!")
+        if all_agents:
+            # Create a responsive layout for agents
+            for agent_code in all_agents:
+                customers_count = agent_customers.get(agent_code, 0)
+                policies_count = agent_policies.get(agent_code, 0)
+                
+                with st.container():
+                    st.markdown(f"**🏢 {agent_code}**")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Customers", customers_count)
+                    with col2:
+                        st.metric("Policies", policies_count)
+                    st.markdown("---")
+        else:
+            st.info("No agent data available yet.")
         
         # Note about file processing (not applicable for cloud)
         st.markdown("### 📁 File Processing Status")
-        st.info("� File processing features are available in the local version. Cloud version shows database data only.")
+        st.info("📊 File processing features are available in the local version. Cloud version shows database data only.")
         
     except Exception as e:
-        st.error(f"❌ Error getting database stats: {e}")
+        st.error(f"Error getting database stats: {e}")
 
 def show_setup_instructions():
     """Show setup instructions if database doesn't exist"""
@@ -1440,14 +1447,62 @@ def show_add_policy_form(customer_id, customer_name):
 def main():
     """Main Streamlit app"""
     st.set_page_config(
-        page_title="LIC Customer Database",
+        page_title="AM's LIC Database",
         page_icon="🏢",
         layout="wide",
         initial_sidebar_state="expanded"
     )
     
+    # Add mobile-friendly custom CSS
+    st.markdown("""
+        <style>
+        /* Mobile responsive adjustments */
+        @media (max-width: 768px) {
+            .main .block-container {
+                padding-left: 1rem;
+                padding-right: 1rem;
+                max-width: 100%;
+            }
+            
+            /* Make metrics stack on mobile */
+            [data-testid="stMetric"] {
+                margin-bottom: 0.5rem;
+            }
+            
+            /* Reduce font sizes for mobile */
+            h1 {
+                font-size: 1.8rem !important;
+            }
+            h2 {
+                font-size: 1.4rem !important;
+            }
+            h3 {
+                font-size: 1.2rem !important;
+            }
+        }
+        
+        /* Clean card styling */
+        .stContainer {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        /* Better button styling */
+        .stButton button {
+            border-radius: 0.5rem;
+        }
+        
+        /* Improve spacing */
+        .element-container {
+            margin-bottom: 0.5rem;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
     # Header
-    st.title("🏢 LIC Customer Database")
+    st.title("🏢 AM's LIC Database")
     st.markdown("Search and manage customer policies efficiently")
     
     # Sidebar with project info
