@@ -1458,10 +1458,6 @@ def main():
         st.markdown("<div style='margin-top: 1.85rem;'></div>", unsafe_allow_html=True)
         add_new_customer_btn = st.button("➕ Add Customer", type="primary", use_container_width=True)
     
-    with col2:
-        st.markdown("<div style='margin-top: 1.85rem;'></div>", unsafe_allow_html=True)
-        add_new_customer_btn = st.button("➕ Add Customer", type="primary", use_container_width=True)
-    
     # Show Add Customer form if button clicked
     if 'show_add_customer_form' not in st.session_state:
         st.session_state.show_add_customer_form = False
