@@ -432,11 +432,11 @@ def display_policy_edit_form(policy):
         with col1:
             plan_type = st.text_input("Plan Type", value=policy.get('plan_type', '') or '')
             agent_code = st.text_input("Agent Code", value=policy.get('agent_code', '') or '')
-            premium_mode = st.selectbox("Premium Mode", 
-                                      options=['Yearly', 'Half-Yearly', 'Quarterly', 'Monthly'], 
-                                      index=0 if not policy.get('premium_mode') 
-                                      else (['Yearly', 'Half-Yearly', 'Quarterly', 'Monthly'].index(policy.get('premium_mode')) 
-                                           if policy.get('premium_mode') in ['Yearly', 'Half-Yearly', 'Quarterly', 'Monthly'] else 0))
+            payment_term = st.selectbox("Payment Term", 
+                                      options=['Yearly', 'Half-Yearly', 'Quarterly', 'Monthly', 'One-time'], 
+                                      index=0 if not policy.get('payment_period') 
+                                      else (['Yearly', 'Half-Yearly', 'Quarterly', 'Monthly', 'One-time'].index(policy.get('payment_period')) 
+                                           if policy.get('payment_period') in ['Yearly', 'Half-Yearly', 'Quarterly', 'Monthly', 'One-time'] else 0))
         
         with col2:
             plan_name = st.text_input("Plan Name", value=policy.get('plan_name', '') or '')
@@ -487,9 +487,6 @@ def display_policy_edit_form(policy):
             sum_assured = st.number_input("Sum Assured (₹)", 
                                         value=float(policy.get('sum_assured', 0)) if policy.get('sum_assured') else 0.0,
                                         min_value=0.0, step=1000.0)
-            premium_paying_term = st.number_input("Premium Paying Term (Years)", 
-                                                value=int(policy.get('premium_paying_term', 0)) if policy.get('premium_paying_term') else 0,
-                                                min_value=0, step=1)
         
         # Form buttons
         col1, col2, col3 = st.columns([1, 1, 2])
@@ -505,15 +502,14 @@ def display_policy_edit_form(policy):
                 'plan_type': plan_type,
                 'plan_name': plan_name,
                 'agent_code': agent_code,
-                'premium_mode': premium_mode,
+                'payment_period': payment_term,
                 'date_of_commencement': commencement_date.strftime('%Y-%m-%d') if commencement_date else None,
                 'current_fup_date': fup_date.strftime('%Y-%m-%d') if fup_date else None,
                 'maturity_date': maturity_date.strftime('%Y-%m-%d') if maturity_date else None,
                 'last_payment_date': last_payment_date.strftime('%Y-%m-%d') if last_payment_date else None,
                 'premium_amount': premium_amount if premium_amount > 0 else None,
                 'sum_assured': sum_assured if sum_assured > 0 else None,
-                'policy_term': policy_term if policy_term > 0 else None,
-                'premium_paying_term': premium_paying_term if premium_paying_term > 0 else None
+                'policy_term': policy_term if policy_term > 0 else None
             }
             
             success, message = update_policy_details(policy['policy_number'], updates)
@@ -573,11 +569,11 @@ def update_policy_details(policy_number, updates):
         update_data = {}
         
         for field, value in updates.items():
-            if field in ['agent_code', 'agent_name', 'plan_type', 'plan_name', 
-                        'date_of_commencement', 'premium_mode', 'current_fup_date', 
+            if field in ['agent_code', 'plan_type', 'plan_name', 
+                        'date_of_commencement', 'payment_period', 'current_fup_date', 
                         'sum_assured', 'premium_amount', 'status', 'maturity_date', 
-                        'policy_term', 'premium_paying_term', 'last_payment_date']:
-                if field in ['sum_assured', 'premium_amount', 'policy_term', 'premium_paying_term']:
+                        'policy_term', 'last_payment_date']:
+                if field in ['sum_assured', 'premium_amount', 'policy_term']:
                     # Handle numeric fields
                     try:
                         update_data[field] = float(value) if value and str(value).strip() else None
@@ -717,18 +713,16 @@ def add_new_policy(policy_data, customer_id, document_date=None):
                 'policy_number': policy_data.get('policy_number'),
                 'customer_id': customer_id,
                 'agent_code': policy_data.get('agent_code'),
-                'agent_name': policy_data.get('agent_name'),
                 'plan_type': policy_data.get('plan_type'),
                 'plan_name': policy_data.get('plan_name'),
                 'date_of_commencement': policy_data.get('date_of_commencement'),
-                'premium_mode': policy_data.get('premium_mode'),
+                'payment_period': policy_data.get('payment_period'),
                 'current_fup_date': policy_data.get('current_fup_date'),
                 'sum_assured': policy_data.get('sum_assured'),
                 'premium_amount': policy_data.get('premium_amount'),
                 'status': policy_data.get('status', 'Active'),
                 'maturity_date': policy_data.get('maturity_date'),
                 'policy_term': policy_data.get('policy_term'),
-                'premium_paying_term': policy_data.get('premium_paying_term'),
                 'last_payment_date': policy_data.get('last_payment_date'),
                 'extraction_method': 'manual',
                 'created_date': current_date,
@@ -1181,14 +1175,12 @@ def show_manual_entry_forms():
                     new_policy_number = st.text_input("Policy Number*", placeholder="New policy number")
                     new_plan_type = st.text_input("Plan Type", placeholder="e.g., 075-20")
                     new_agent_code = st.text_input("Agent Code", placeholder="Agent code")
-                    new_premium_mode = st.selectbox("Premium Mode", 
-                                                  options=['', 'Yearly', 'Half-Yearly', 'Quarterly', 'Monthly'])
+                    new_payment_term = st.selectbox("Payment Term", 
+                                                  options=['', 'Yearly', 'Half-Yearly', 'Quarterly', 'Monthly', 'One-time'])
                     new_premium_amount = st.number_input("Premium Amount (₹)", min_value=0.0, value=0.0)
                 
                 with col2:
                     new_plan_name = st.text_input("Plan Name", placeholder="Plan description")
-                    new_agent_name = st.text_input("Agent Name", placeholder="Agent full name")
-                    new_status = st.selectbox("Status", options=['Active', 'Lapsed', 'Matured', 'Surrendered'])
                     new_sum_assured = st.number_input("Sum Assured (₹)", min_value=0.0, value=0.0)
                     new_policy_term = st.number_input("Policy Term (Years)", min_value=0, value=0)
                 
@@ -1235,9 +1227,8 @@ def show_manual_entry_forms():
                             'plan_type': new_plan_type or None,
                             'plan_name': new_plan_name or None,
                             'agent_code': new_agent_code or None,
-                            'agent_name': new_agent_name or None,
-                            'premium_mode': new_premium_mode if new_premium_mode else None,
-                            'status': new_status,
+                            'payment_period': new_payment_term if new_payment_term else None,
+                            'status': 'Active',
                             'date_of_commencement': new_date_of_commencement.strftime('%Y-%m-%d') if new_date_of_commencement else None,
                             'current_fup_date': new_current_fup_date.strftime('%Y-%m-%d') if new_current_fup_date else None,
                             'maturity_date': new_maturity_date.strftime('%Y-%m-%d') if new_maturity_date else None,
@@ -1289,14 +1280,12 @@ def show_add_policy_form(customer_id, customer_name):
             new_policy_number = st.text_input("Policy Number*", placeholder="New policy number")
             new_plan_type = st.text_input("Plan Type", placeholder="e.g., 075-20")
             new_agent_code = st.text_input("Agent Code", placeholder="Agent code")
-            new_premium_mode = st.selectbox("Premium Mode", 
-                                          options=['', 'Yearly', 'Half-Yearly', 'Quarterly', 'Monthly'])
+            new_payment_term = st.selectbox("Payment Term", 
+                                          options=['', 'Yearly', 'Half-Yearly', 'Quarterly', 'Monthly', 'One-time'])
             new_premium_amount = st.number_input("Premium Amount (₹)", min_value=0.0, value=0.0)
         
         with col2:
             new_plan_name = st.text_input("Plan Name", placeholder="Plan description")
-            new_agent_name = st.text_input("Agent Name", placeholder="Agent full name")
-            new_status = st.selectbox("Status", options=['Active', 'Lapsed', 'Matured', 'Surrendered'])
             new_sum_assured = st.number_input("Sum Assured (₹)", min_value=0.0, value=0.0)
             new_policy_term = st.number_input("Policy Term (Years)", min_value=0, value=0)
         
@@ -1341,9 +1330,8 @@ def show_add_policy_form(customer_id, customer_name):
                     'plan_type': new_plan_type or None,
                     'plan_name': new_plan_name or None,
                     'agent_code': new_agent_code or None,
-                    'agent_name': new_agent_name or None,
-                    'premium_mode': new_premium_mode if new_premium_mode else None,
-                    'status': new_status,
+                    'payment_period': new_payment_term if new_payment_term else None,
+                    'status': 'Active',
                     'date_of_commencement': new_date_of_commencement.strftime('%Y-%m-%d') if new_date_of_commencement else None,
                     'current_fup_date': new_current_fup_date.strftime('%Y-%m-%d') if new_current_fup_date else None,
                     'maturity_date': new_maturity_date.strftime('%Y-%m-%d') if new_maturity_date else None,
