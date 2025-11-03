@@ -59,9 +59,10 @@ lic_database/
 ├── config/
 │   └── agents.json                # Agent configuration
 ├── data/
-│   └── pdfs/
-│       ├── incoming/              # Drop PDFs here for processing
-│       └── processed/             # Successfully processed PDFs
+│   ├── pdfs/
+│   │   ├── incoming/              # Drop PDFs here for processing
+│   │   └── processed/             # Successfully processed PDFs
+│   └── lic_local_backup.db        # Local SQLite backup (auto-created)
 ├── supabase_schema.sql            # Database schema
 ├── requirements.txt               # Python dependencies
 └── README.md                      # This file
@@ -96,7 +97,21 @@ This prevents overwriting newer data with older PDFs while keeping premium amoun
 ```
 1. Place PDFs → data/pdfs/incoming/
 2. Process    → python3 scripts/supabase_pdf_processor.py
+                • Uploads to Supabase Cloud (Primary)
+                • Backs up to Local Database (SQLite)
+                • Shows success status for each
 3. View/Edit  → streamlit run scripts/streamlit_app.py
+```
+
+**Dual Database System:**
+- **Supabase Cloud:** Primary database (PostgreSQL, cloud-hosted)
+- **Local Backup:** Automatic SQLite backup at `data/lic_local_backup.db`
+
+**Processing Output:** After each PDF, you'll see:
+```
+✅ Supabase Cloud: Created/Updated policy 123456789
+✅ Local Database: Created/Updated policy 123456789
+🎉 SUCCESS: Policy 123456789 synced to both Cloud and Local DB
 ```
 
 **Error Handling:** Files with processing errors remain in the `incoming/` folder. Error messages are displayed in the terminal. Fix the issues and rerun the processor to retry failed files.

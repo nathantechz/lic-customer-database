@@ -194,12 +194,21 @@ def extract_commission_details(text):
     
     print("    💰 Parsing commission table...")
     
+    # First, try to extract agent code from the header
+    agent_code_from_header = None
+    for line in lines[:20]:  # Check first 20 lines for agent code
+        agent_match = re.search(r'Agent\s+Code\s*:\s*LIC(\d{7}N)', line, re.IGNORECASE)
+        if agent_match:
+            agent_code_from_header = agent_match.group(1)
+            print(f"    📋 Found Agent Code in header: {agent_code_from_header}")
+            break
+    
     for line in lines:
         line_clean = line.strip()
-        if not line_clean or line_clean.startswith('S.No') or 'PH Name' in line:
+        if not line_clean or line_clean.startswith('S.No') or 'P/H Name' in line or 'Agent commmision' in line:
             continue
         
-        # Commission pattern: Serial Name Policy Plan/Term DueDate ... Premium Commission
+        # Commission pattern: Serial P/H_Name PolicyNo Pln/Tm DueDate ... Premium Commission
         # Example: "1 C NONDICHAMY 308700508 814-21 27/05/2025 27/08/2018 CBK2 26/05/2025 2640.00 132.00"
         commission_pattern = r'^\s*(\d+)\s+([A-Z][A-Za-z\s.]{2,50}?)\s+(\d{9})\s+(\d{3}[-/]\d{2})\s+(\d{1,2}/\d{1,2}/\d{4})?\s*(.*)$'
         
@@ -215,13 +224,23 @@ def extract_commission_details(text):
             if cleaned_name and len(cleaned_name) > 2:
                 parsed_due_date = parse_date(due_date) if due_date else None
                 
-                # Extract amounts
-                amounts = re.findall(r'(\d+\.?\d*)', remaining)
+                # Extract amounts - Premium is before Commission
+                # Format: ... FUP_Date Premium Commission
+                # Example: "11/10/2025 812.00 48.72"
+                # Look for decimal amounts only (not dates)
+                amounts = re.findall(r'\b(\d+\.\d{2})\b', remaining)
                 premium_amount = None
                 
                 if len(amounts) >= 2:
                     try:
-                        premium_amount = float(amounts[-2])  # Second last is premium
+                        # Premium is second-to-last, commission is last
+                        premium_amount = float(amounts[-2])
+                    except ValueError:
+                        pass
+                elif len(amounts) == 1:
+                    # Only one amount - assume it's premium
+                    try:
+                        premium_amount = float(amounts[0])
                     except ValueError:
                         pass
                 
@@ -230,7 +249,8 @@ def extract_commission_details(text):
                     'customer_name': cleaned_name,
                     'plan_name': plan_type,
                     'current_fup_date': parsed_due_date,
-                    'premium_amount': premium_amount
+                    'premium_amount': premium_amount,
+                    'agent_code_from_pdf': agent_code_from_header  # Store agent code from header
                 })
                 
                 print(f"    ✅ {policy_no} → {cleaned_name}")
@@ -341,7 +361,7 @@ def find_or_create_customer(supabase: Client, customer_name: str, existing_custo
 
 def sync_policy_to_supabase(supabase: Client, policy_data: dict, existing_policies: dict, 
                             existing_customers: dict, agent_code: str, stats: dict, 
-                            local_conn: sqlite3.Connection = None):
+                            local_conn: sqlite3.Connection = None, is_commission_pdf: bool = False):
     """
     Sync a single policy to Supabase AND local database following the rules:
     1. Create new policy if doesn't exist
@@ -349,9 +369,19 @@ def sync_policy_to_supabase(supabase: Client, policy_data: dict, existing_polici
     3. Update premium amount (fixed)
     4. Normalize sum_assured
     5. Update agent_code if not present
+    
+    Commission PDF specific rules:
+    - Use agent code from PDF header (stored in policy_data['agent_code_from_pdf'])
+    - Customer name from P/H Name column is final - update DB if different
+    - Plan type (pln/tm) from PDF is final - always update
+    - Premium amount from "Premium" column is final - always update
     """
     policy_number = policy_data['policy_number']
     customer_name = policy_data['customer_name']
+    
+    # Use agent code from PDF header if available (for commission PDFs)
+    if is_commission_pdf and policy_data.get('agent_code_from_pdf'):
+        agent_code = policy_data['agent_code_from_pdf']
     
     # Track success for both databases
     supabase_success = False
@@ -391,6 +421,37 @@ def sync_policy_to_supabase(supabase: Client, policy_data: dict, existing_polici
         existing = existing_policies[policy_number]
         updates = {}
         
+        # Commission PDF specific: Check if customer name matches
+        if is_commission_pdf:
+            existing_customer_id = existing.get('customer_id')
+            if existing_customer_id:
+                # Get existing customer name
+                try:
+                    result = supabase.table('customers').select('customer_name').eq('customer_id', existing_customer_id).execute()
+                    if result.data:
+                        existing_customer_name = result.data[0]['customer_name'].strip().upper()
+                        if existing_customer_name != customer_name.strip().upper():
+                            # Name mismatch - customer name from PDF is final
+                            print(f"  ⚠️  Customer name mismatch!")
+                            print(f"     Database: {existing_customer_name}")
+                            print(f"     PDF (final): {customer_name}")
+                            
+                            # Update customer name in customers table
+                            try:
+                                supabase.table('customers').update({
+                                    'customer_name': customer_name
+                                }).eq('customer_id', existing_customer_id).execute()
+                                print(f"  ✅ Updated customer name to: {customer_name}")
+                                # Update local cache
+                                existing_customers[customer_name.strip().upper()] = {
+                                    'customer_id': existing_customer_id,
+                                    'customer_name': customer_name
+                                }
+                            except Exception as e:
+                                print(f"  ❌ Failed to update customer name: {e}")
+                except Exception as e:
+                    print(f"  ⚠️  Could not verify customer name: {e}")
+        
         # Rule 1: Update FUP only if PDF date is later
         pdf_fup = policy_data.get('current_fup_date')
         existing_fup = existing.get('current_fup_date')
@@ -402,30 +463,47 @@ def sync_policy_to_supabase(supabase: Client, policy_data: dict, existing_polici
             else:
                 print(f"  ℹ️  FUP not updated (PDF: {pdf_fup}, DB: {existing_fup})")
         
-        # Rule 2: Update premium amount (always, as it's fixed)
-        if fields_to_update.get('premium_amount'):
+        # Rule 2: Premium amount - always update for commission PDFs (it's final)
+        if is_commission_pdf and fields_to_update.get('premium_amount'):
+            updates['premium_amount'] = fields_to_update['premium_amount']
+            print(f"  💰 Updating premium amount: {fields_to_update['premium_amount']}")
+        elif fields_to_update.get('premium_amount'):
             updates['premium_amount'] = fields_to_update['premium_amount']
         
-        # Rule 3: Update agent_code only if not present in database
-        if agent_code and not existing.get('agent_code'):
-            updates['agent_code'] = agent_code
-            print(f"  👤 Adding agent code: {agent_code}")
+        # Rule 3: Plan type - always update for commission PDFs (it's final)
+        if is_commission_pdf and fields_to_update.get('plan_name'):
+            updates['plan_name'] = fields_to_update['plan_name']
+            if existing.get('plan_name') != fields_to_update['plan_name']:
+                print(f"  📋 Updating plan type: {existing.get('plan_name')} → {fields_to_update['plan_name']}")
         
-        # Rule 4: Update other fields if empty
-        for field in ['plan_name', 'date_of_commencement', 'payment_period', 'sum_assured']:
-            if fields_to_update.get(field) and not existing.get(field):
-                updates[field] = fields_to_update[field]
+        # Rule 4: Update agent_code if not present OR if from commission PDF header
+        if agent_code:
+            if not existing.get('agent_code'):
+                updates['agent_code'] = agent_code
+                print(f"  👤 Adding agent code: {agent_code}")
+            elif is_commission_pdf and existing.get('agent_code') != agent_code:
+                # Commission PDF agent code is authoritative
+                updates['agent_code'] = agent_code
+                print(f"  👤 Updating agent code: {existing.get('agent_code')} → {agent_code}")
+        
+        # Rule 5: Update other fields if empty (only for non-commission PDFs)
+        if not is_commission_pdf:
+            for field in ['plan_name', 'date_of_commencement', 'payment_period', 'sum_assured']:
+                if fields_to_update.get(field) and not existing.get(field):
+                    updates[field] = fields_to_update[field]
         
         if updates:
             try:
                 supabase.table('policies').update(updates).eq('policy_number', policy_number).execute()
-                print(f"  ✅ Updated policy {policy_number}: {', '.join(updates.keys())}")
+                print(f"  ✅ Supabase Cloud: Updated policy {policy_number}")
+                supabase_success = True
                 stats['updated'] += 1
             except Exception as e:
-                print(f"  ❌ Failed to update policy {policy_number}: {e}")
+                print(f"  ❌ Supabase Cloud: Failed to update policy {policy_number}: {e}")
                 stats['errors'] += 1
         else:
             print(f"  ℹ️  No updates needed for {policy_number}")
+            supabase_success = True  # No updates needed is considered success
             stats['skipped'] += 1
     else:
         # New policy - create it
@@ -445,11 +523,113 @@ def sync_policy_to_supabase(supabase: Client, policy_data: dict, existing_polici
                 new_policy['current_fup_date'] = policy_data['current_fup_date']
             
             supabase.table('policies').insert(new_policy).execute()
-            print(f"  ✅ Created new policy {policy_number}")
+            print(f"  ✅ Supabase Cloud: Created new policy {policy_number}")
+            supabase_success = True
             stats['created'] += 1
         except Exception as e:
-            print(f"  ❌ Failed to create policy {policy_number}: {e}")
+            print(f"  ❌ Supabase Cloud: Failed to create policy {policy_number}: {e}")
             stats['errors'] += 1
+    
+    # Sync to local database
+    if local_conn and customer_id:
+        try:
+            cursor = local_conn.cursor()
+            
+            # Get or create customer in local DB
+            cursor.execute('SELECT customer_id FROM customers WHERE customer_name = ?', 
+                          (customer_name,))
+            local_customer = cursor.fetchone()
+            
+            if not local_customer:
+                cursor.execute('''
+                    INSERT INTO customers (customer_name, extraction_method, created_date, last_updated)
+                    VALUES (?, ?, ?, ?)
+                ''', (customer_name, 'pdf_import', datetime.now().isoformat(), datetime.now().isoformat()))
+                local_customer_id = cursor.lastrowid
+            else:
+                local_customer_id = local_customer[0]
+            
+            # Check if policy exists in local DB
+            cursor.execute('SELECT policy_id FROM policies WHERE policy_number = ?', 
+                          (policy_number,))
+            local_policy = cursor.fetchone()
+            
+            if local_policy:
+                # Update existing policy
+                update_fields = []
+                update_values = []
+                
+                if policy_data.get('current_fup_date'):
+                    update_fields.append('current_fup_date = ?')
+                    update_values.append(policy_data['current_fup_date'])
+                
+                if fields_to_update.get('premium_amount'):
+                    update_fields.append('premium_amount = ?')
+                    update_values.append(fields_to_update['premium_amount'])
+                
+                if fields_to_update.get('plan_name'):
+                    update_fields.append('plan_name = ?')
+                    update_values.append(fields_to_update['plan_name'])
+                
+                if fields_to_update.get('sum_assured'):
+                    update_fields.append('sum_assured = ?')
+                    update_values.append(fields_to_update['sum_assured'])
+                
+                if agent_code:
+                    update_fields.append('agent_code = ?')
+                    update_values.append(agent_code)
+                
+                update_fields.append('last_updated = ?')
+                update_values.append(datetime.now().isoformat())
+                
+                if update_fields:
+                    update_values.append(policy_number)
+                    cursor.execute(f'''
+                        UPDATE policies 
+                        SET {', '.join(update_fields)}
+                        WHERE policy_number = ?
+                    ''', update_values)
+                    print(f"  ✅ Local Database: Updated policy {policy_number}")
+                    local_success = True
+            else:
+                # Insert new policy
+                cursor.execute('''
+                    INSERT INTO policies (
+                        policy_number, customer_id, agent_code, plan_name, 
+                        premium_amount, sum_assured, date_of_commencement, 
+                        payment_period, current_fup_date, created_date, last_updated
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    policy_number,
+                    local_customer_id,
+                    agent_code,
+                    fields_to_update.get('plan_name'),
+                    fields_to_update.get('premium_amount'),
+                    fields_to_update.get('sum_assured'),
+                    fields_to_update.get('date_of_commencement'),
+                    fields_to_update.get('payment_period'),
+                    policy_data.get('current_fup_date'),
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat()
+                ))
+                print(f"  ✅ Local Database: Created new policy {policy_number}")
+                local_success = True
+            
+            local_conn.commit()
+            
+        except Exception as e:
+            print(f"  ❌ Local Database: Failed to sync policy {policy_number}: {e}")
+            local_conn.rollback()
+    
+    # Print overall status
+    if supabase_success and local_success:
+        print(f"  🎉 SUCCESS: Policy {policy_number} synced to both Cloud and Local DB")
+    elif supabase_success:
+        print(f"  ⚠️  PARTIAL: Policy {policy_number} synced to Cloud only")
+    elif local_success:
+        print(f"  ⚠️  PARTIAL: Policy {policy_number} synced to Local DB only")
+    else:
+        print(f"  ❌ FAILED: Policy {policy_number} not synced to any database")
 
 def process_pdf_files():
     """Main processing function"""
@@ -467,12 +647,23 @@ def process_pdf_files():
     
     # Connect to Supabase
     try:
-        print("\n🔌 Connecting to Supabase...")
+        print("\n🔌 Connecting to Supabase Cloud...")
         supabase = get_supabase_client()
-        print("✅ Connected to Supabase")
+        print("✅ Connected to Supabase Cloud")
     except Exception as e:
         print(f"❌ Failed to connect to Supabase: {e}")
         return
+    
+    # Connect to local database
+    try:
+        print("💾 Connecting to Local Database...")
+        local_conn = get_local_db_connection()
+        print("✅ Connected to Local Database")
+        print(f"   📍 Location: {Path(__file__).parent.parent / 'data' / 'lic_local_backup.db'}")
+    except Exception as e:
+        print(f"⚠️  Warning: Local database not available: {e}")
+        print("   Continuing with Supabase Cloud only...")
+        local_conn = None
     
     # Get existing data
     existing_policies = get_existing_policies(supabase)
@@ -525,9 +716,11 @@ def process_pdf_files():
             
             # Determine document type and extract details
             policy_details = []
+            is_commission_pdf = False
             
-            if 'Commission' in text or 'PH Name' in text or 'CM-' in pdf_file.name:
+            if 'Commission' in text or 'P/H Name' in text or 'CM-' in pdf_file.name or 'Agent Code' in text:
                 print("  📋 Document type: Commission")
+                is_commission_pdf = True
                 policy_details = extract_commission_details(text)
             elif 'Premium Due' in text or 'Name of Assured' in text or 'Premdue' in pdf_file.name.lower():
                 print("  📋 Document type: Premium Due")
@@ -551,7 +744,9 @@ def process_pdf_files():
                     existing_policies, 
                     existing_customers, 
                     agent_code,
-                    stats
+                    stats,
+                    local_conn,
+                    is_commission_pdf
                 )
             
             # Move to processed
@@ -585,6 +780,12 @@ def process_pdf_files():
         print("\nℹ️  Fix the errors and run the processor again to retry these files.")
     
     print("="*60)
+    
+    # Close local database connection
+    if local_conn:
+        local_conn.close()
+        print("\n💾 Local database connection closed")
+        print(f"📍 Backup saved at: {Path(__file__).parent.parent / 'data' / 'lic_local_backup.db'}")
 
 if __name__ == "__main__":
     process_pdf_files()

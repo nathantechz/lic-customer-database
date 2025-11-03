@@ -6,7 +6,7 @@ This folder contains the essential scripts for the LIC Customer Database applica
 
 ### Core Application
 - **`streamlit_app.py`** - Main Streamlit web application for viewing and managing customer/policy data
-- **`supabase_pdf_processor.py`** - PDF processor that extracts data and syncs to Supabase
+- **`supabase_pdf_processor.py`** - PDF processor that extracts data and syncs to Supabase Cloud + Local Database
 
 ### Launch Scripts
 - **`start_streamlit.command`** - Double-click to launch the Streamlit web app
@@ -15,6 +15,10 @@ This folder contains the essential scripts for the LIC Customer Database applica
 - **`.streamlit/`** - Contains Streamlit configuration and secrets (Supabase credentials)
   - `secrets.toml` - Supabase connection details (DO NOT commit to Git)
   - `config.toml` - Streamlit app configuration
+
+### Data Storage
+- **Supabase Cloud** - Primary PostgreSQL database (cloud-hosted)
+- **Local Backup** - `data/lic_local_backup.db` - SQLite backup created automatically during PDF processing
 
 ---
 
@@ -45,6 +49,19 @@ python3 supabase_pdf_processor.py
 1. **Upload PDFs** → Place commission/premium PDFs in `data/pdfs/incoming/`
 2. **Process PDFs** → Run `supabase_pdf_processor.py` to extract and sync data
 3. **View/Manage Data** → Use Streamlit app to search, edit, and manage records
+
+### PDF Processing Output
+
+For each PDF processed, you'll see status messages like:
+```
+✅ Supabase Cloud: Created new policy 123456789
+✅ Local Database: Created new policy 123456789
+🎉 SUCCESS: Policy 123456789 synced to both Cloud and Local DB
+```
+
+**Data Storage:**
+- **Primary:** Supabase Cloud (PostgreSQL)
+- **Backup:** Local SQLite database at `data/lic_local_backup.db`
 
 **Note:** Files with errors remain in `incoming/` folder. Error messages are displayed in terminal output. Fix the issues and run the processor again to retry.
 

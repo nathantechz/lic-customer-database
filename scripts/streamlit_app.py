@@ -434,18 +434,14 @@ def display_policy_edit_form(policy):
         with col1:
             plan_type = st.text_input("Plan Type", value=policy.get('plan_type', '') or '')
             agent_code = st.text_input("Agent Code", value=policy.get('agent_code', '') or '')
-            status = st.selectbox("Status", 
-                                options=['Active', 'Lapsed', 'Matured', 'Surrendered'], 
-                                index=['Active', 'Lapsed', 'Matured', 'Surrendered'].index(policy.get('status', 'Active')))
-        
-        with col2:
-            plan_name = st.text_input("Plan Name", value=policy.get('plan_name', '') or '')
-            agent_name = st.text_input("Agent Name", value=policy.get('agent_name', '') or '')
             premium_mode = st.selectbox("Premium Mode", 
                                       options=['Yearly', 'Half-Yearly', 'Quarterly', 'Monthly'], 
                                       index=0 if not policy.get('premium_mode') 
                                       else (['Yearly', 'Half-Yearly', 'Quarterly', 'Monthly'].index(policy.get('premium_mode')) 
                                            if policy.get('premium_mode') in ['Yearly', 'Half-Yearly', 'Quarterly', 'Monthly'] else 0))
+        
+        with col2:
+            plan_name = st.text_input("Plan Name", value=policy.get('plan_name', '') or '')
         
         # Dates
         st.markdown("**Dates**")
@@ -511,8 +507,6 @@ def display_policy_edit_form(policy):
                 'plan_type': plan_type,
                 'plan_name': plan_name,
                 'agent_code': agent_code,
-                'agent_name': agent_name,
-                'status': status,
                 'premium_mode': premium_mode,
                 'date_of_commencement': commencement_date.strftime('%Y-%m-%d') if commencement_date else None,
                 'current_fup_date': fup_date.strftime('%Y-%m-%d') if fup_date else None,
@@ -1435,7 +1429,6 @@ def main():
     
     # Header
     st.title("🏢 AM's LIC Database")
-    st.markdown("Search and manage customer policies efficiently")
     
     # Sidebar with project info
     with st.sidebar:
@@ -1459,7 +1452,6 @@ def main():
         st.stop()
     
     # Database stats
-    st.markdown("### 📊 Database Overview")
     show_database_stats()
     
     st.markdown("---")
