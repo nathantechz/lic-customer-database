@@ -1,211 +1,102 @@
-# LIC Customer Database System
+# AM's LIC Customer Database
 
-A cloud-ready system to manage LIC customer data with Supabase backend and Streamlit web interface.
-
-## ☁️ Cloud Deployment
-
-This app is ready to deploy to Streamlit Cloud!
-
-**Quick Start**: See `QUICK_START.md` (10 minutes to deploy)  
-**Full Guide**: See `STREAMLIT_CLOUD_DEPLOYMENT.md`  
-**Checklist**: See `DEPLOYMENT_CHECKLIST.md`
+A complete system to manage LIC customer data with Supabase cloud database and Streamlit web interface.
 
 ## 🚀 Features
 
-- 👥 Customer management with search
-- 📋 Policy tracking and management
-- 💰 Premium payment records
-- 🔄 Duplicate detection
-- 📊 Database statistics and analytics
-- ✏️ Add/edit customers and policies
-- 🏷️ Nickname support for easy identification
-- 🗺️ Google Maps integration for locations
+- 👥 **Customer Management** - Add, edit, search customers
+- 📋 **Policy Tracking** - Manage policies with intelligent updates
+- 💰 **Premium Records** - Track premium payments and due dates
+- � **PDF Processing** - Automated data extraction from LIC PDFs
+- 📊 **Analytics** - Compact, mobile-friendly statistics dashboard
+- 🔍 **Smart Search** - Find by name, policy number, phone, agent code
+- � **Intelligent Updates** - Smart FUP date and premium handling
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: Streamlit
-- **Backend**: Supabase (PostgreSQL)
-- **Deployment**: Streamlit Cloud
-- **Language**: Python 3.7+
+- **Frontend**: Streamlit (Compact, mobile-friendly UI)
+- **Backend**: Supabase (Cloud PostgreSQL)
+- **PDF Processing**: pdfplumber + custom extraction logic
+- **Language**: Python 3.11+
 
 ## 📦 Quick Setup
 
-### Local Development
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/lic-customer-database.git
-   cd lic-customer-database
-   ```
-
-2. **Install dependencies**
+1. **Install dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Set up Supabase**
-   - Create account at [supabase.com](https://supabase.com)
-   - Create new project
-   - Run `supabase_schema.sql` in SQL Editor
-   - Copy Project URL and anon public key
+2. **Configure Supabase credentials**
+   - Edit `scripts/.streamlit/secrets.toml`
+   - Add your Supabase URL and API key
 
-4. **Configure secrets**
-   - Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`
-   - Add your Supabase credentials
-
-5. **Run the app**
+3. **Run the Streamlit app**
    ```bash
-   streamlit run scripts/streamlit_app.py
+   cd scripts
+   streamlit run streamlit_app.py
    ```
+   Or double-click `scripts/start_streamlit.command`
 
-### Cloud Deployment
-
-See `QUICK_START.md` for step-by-step deployment to Streamlit Cloud.
+4. **Process PDFs** (optional)
+   ```bash
+   cd scripts
+   python3 supabase_pdf_processor.py
+   ```
+   Place PDFs in `data/pdfs/incoming/` before processing.
 
 ## 📁 Project Structure
 
 ```
 lic_database/
 ├── scripts/
-│   └── streamlit_app.py          # Main Streamlit app (Supabase-enabled)
-├── .streamlit/
-│   ├── config.toml                # Streamlit configuration
-│   ├── secrets.toml               # Local secrets (not in Git)
-│   └── secrets.toml.example       # Secrets template
+│   ├── streamlit_app.py           # Main Streamlit web app
+│   ├── supabase_pdf_processor.py  # PDF processor with intelligent updates
+│   ├── start_streamlit.command    # Launch script
+│   ├── .streamlit/
+│   │   ├── secrets.toml           # Supabase credentials (not in Git)
+│   │   └── config.toml            # App configuration
+│   └── README.md                  # Scripts documentation
 ├── config/
 │   └── agents.json                # Agent configuration
-├── supabase_schema.sql            # Database schema for Supabase
+├── data/
+│   └── pdfs/
+│       ├── incoming/              # Drop PDFs here for processing
+│       └── processed/             # Successfully processed PDFs
+├── supabase_schema.sql            # Database schema
 ├── requirements.txt               # Python dependencies
-├── QUICK_START.md                 # 10-minute deployment guide
-├── STREAMLIT_CLOUD_DEPLOYMENT.md  # Full deployment guide
-├── DEPLOYMENT_CHECKLIST.md        # Pre-deployment checklist
-├── MIGRATION_SUMMARY.md           # Migration details
 └── README.md                      # This file
 ```
 
 ## 🗄️ Database Schema
 
-The app uses 5 main tables in Supabase:
+The app uses Supabase (PostgreSQL) with these main tables:
 
-1. **customers** - Customer information
-2. **policies** - Insurance policies  
-3. **premium_records** - Premium payments
-4. **agents** - Agent details
-5. **documents** - Document tracking
+1. **customers** - Customer information (name, phone, email, address, etc.)
+2. **policies** - Insurance policies with FUP dates and premium amounts
+3. **premium_records** - Premium payment tracking
+4. **agents** - Agent details and configurations
+5. **documents** - Processed PDF tracking
 
 See `supabase_schema.sql` for complete schema.
 
-## 🔐 Security
+## � PDF Processing
 
-- Secrets stored in `.streamlit/secrets.toml` (not committed)
-- Supabase Row Level Security (RLS) support
-- Environment-aware configuration
-- No hardcoded credentials
+The `supabase_pdf_processor.py` implements intelligent update rules:
 
-## 📊 Features
+1. **New Policies**: Creates policy if not in database
+2. **FUP Date**: Updates only if PDF has a later date than database
+3. **Premium Amount**: Always updates (fixed premium per policy)
+4. **Sum Assured**: Validates and normalizes values
+5. **Agent Code**: Updates only if database value is empty
 
-### Customer Management
-- Search by name, phone, email, Aadhaar, policy number
-- Add new customers with validation
-- Edit customer details
-- Nickname support
-- Duplicate detection
-- Google Maps integration
+This prevents overwriting newer data with older PDFs while keeping premium amounts current.
 
-### Policy Management
-- View all policies for a customer
-- Add new policies
-- Edit policy details
-- Track premium payments
-- Status tracking (Active, Lapsed, Matured, Surrendered)
+## 🎯 Current Workflow
 
-### Analytics
-- Total customers count
-- Total policies count
-- Real vs generic names statistics
-- Extraction method breakdown
-
-## 💻 Development
-
-### Running Locally
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure Supabase credentials in .streamlit/secrets.toml
-
-# Run app
-streamlit run scripts/streamlit_app.py
+```
+1. Place PDFs → data/pdfs/incoming/
+2. Process    → python3 scripts/supabase_pdf_processor.py
+3. View/Edit  → streamlit run scripts/streamlit_app.py
 ```
 
-### Making Changes
-
-1. Edit `scripts/streamlit_app.py`
-2. Test locally
-3. Commit and push to GitHub
-4. Streamlit Cloud auto-deploys
-
-## 🚀 Deployment
-
-### Prerequisites
-- Supabase account (free)
-- GitHub account
-- Streamlit Cloud account (free)
-
-### Steps
-1. Set up Supabase database (3 min)
-2. Test locally (2 min)
-3. Push to GitHub (2 min)
-4. Deploy on Streamlit Cloud (3 min)
-
-**Total time**: ~10 minutes
-
-See `QUICK_START.md` for detailed steps.
-
-## 🆘 Support
-
-- **Documentation**: Check the `.md` files in this repo
-- **Issues**: Create an issue on GitHub
-- **Streamlit Docs**: https://docs.streamlit.io
-- **Supabase Docs**: https://supabase.com/docs
-
-## 📝 Requirements
-
-- Python 3.7+
-- Internet connection (for Supabase)
-- Modern web browser
-
-## 💰 Costs
-
-### Free Tier (Sufficient for personal use)
-- **Streamlit Cloud**: Unlimited public apps
-- **Supabase**: 500MB DB, 2GB bandwidth/month
-- **GitHub**: Free for public repos
-
-### Paid (If needed)
-- **Streamlit Cloud**: $20/month for private apps
-- **Supabase**: Starting at $25/month (8GB DB, 100GB bandwidth)
-
-## 🎯 Roadmap
-
-- [ ] Authentication system
-- [ ] Email notifications for premium dues
-- [ ] Dashboard with charts
-- [ ] Mobile app
-- [ ] Automated backups
-- [ ] PDF generation for reports
-
-## 📜 License
-
-MIT License - feel free to use for personal or commercial projects
-
-## 🙏 Acknowledgments
-
-- Streamlit team for the amazing framework
-- Supabase for the excellent backend platform
-- LIC for the business opportunity
-
----
-
-**Ready to deploy?** Start with `QUICK_START.md`! 🚀
+**Error Handling:** Files with processing errors remain in the `incoming/` folder. Error messages are displayed in the terminal. Fix the issues and rerun the processor to retry failed files.

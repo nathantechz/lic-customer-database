@@ -918,43 +918,38 @@ def show_database_stats():
         for agent_code in agent_customers:
             agent_customers[agent_code] = len(agent_customers[agent_code])
         
-        # Display overview stats in a mobile-friendly layout
-        st.markdown("### �� Overview")
+        # Display compact overview
+        st.markdown("### 📊 Overview")
         
-        col1, col2 = st.columns(2)
+        st.markdown(f"""
+        <div style='background-color: #f0f2f6; padding: 0.5rem; border-radius: 0.3rem; margin-bottom: 0.5rem;'>
+            <p style='margin: 0; font-size: 0.85rem; color: #31333F;'>
+                <strong>📊 Total:</strong> {total_customers} customers • {total_policies} policies
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        with col1:
-            st.metric("👥 Total Customers", total_customers)
-        
-        with col2:
-            st.metric("📋 Total Policies", total_policies)
-        
-        # Display agent-wise stats
-        st.markdown("### 👥 Agent-wise Breakdown")
-        
-        # Get unique agent codes
+        # Display agent-wise stats in compact format
         all_agents = sorted(set(list(agent_customers.keys()) + list(agent_policies.keys())))
         
         if all_agents:
-            # Create a responsive layout for agents
+            agent_stats = []
             for agent_code in all_agents:
                 customers_count = agent_customers.get(agent_code, 0)
                 policies_count = agent_policies.get(agent_code, 0)
-                
-                with st.container():
-                    st.markdown(f"**🏢 {agent_code}**")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Customers", customers_count)
-                    with col2:
-                        st.metric("Policies", policies_count)
-                    st.markdown("---")
+                agent_stats.append(f"{agent_code}: {customers_count}c • {policies_count}p")
+            
+            agent_text = " | ".join(agent_stats)
+            
+            st.markdown(f"""
+            <div style='background-color: #f0f2f6; padding: 0.5rem; border-radius: 0.3rem;'>
+                <p style='margin: 0; font-size: 0.8rem; color: #31333F;'>
+                    <strong>👥 By Agent:</strong> {agent_text}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
         else:
             st.info("No agent data available yet.")
-        
-        # Note about file processing (not applicable for cloud)
-        st.markdown("### 📁 File Processing Status")
-        st.info("📊 File processing features are available in the local version. Cloud version shows database data only.")
         
     except Exception as e:
         st.error(f"Error getting database stats: {e}")
@@ -991,69 +986,6 @@ def show_setup_instructions():
     # Add a button to check again
     if st.button("🔄 Check Connection Again"):
         st.rerun()
-
-def show_name_extraction_debug():
-    """Show debugging information for name extraction issues"""
-    supabase = get_database_connection()
-    if not supabase:
-        return
-    
-    try:
-        st.write("### 🔍 Name Extraction Debug")
-        
-        # Show sample customers with generic names
-        response = supabase.table('customers').select(
-            'customer_name, policies(policy_number, agent_code), created_date'
-        ).ilike('customer_name', 'Customer_%').order('created_date', desc=True).limit(20).execute()
-        
-        generic_customers = response.data if response.data else []
-        
-        if generic_customers:
-            st.write("**Recent customers with generic names:**")
-            
-            data = []
-            for customer in generic_customers:
-                policies = customer.get('policies', [])
-                policy_number = policies[0]['policy_number'] if policies else 'N/A'
-                agent_code = policies[0]['agent_code'] if policies and policies[0].get('agent_code') else 'N/A'
-                
-                data.append({
-                    'Customer Name': customer['customer_name'],
-                    'Policy Number': policy_number,
-                    'Agent Code': agent_code,
-                    'Created Date': customer.get('created_date', 'N/A')
-                })
-            
-            df = pd.DataFrame(data)
-            st.dataframe(df, use_container_width=True)
-        
-        # Show customers with real names for comparison
-        real_response = supabase.table('customers').select(
-            'customer_name, policies(policy_number, agent_code)'
-        ).not_.ilike('customer_name', 'Customer_%').order('created_date', desc=True).limit(10).execute()
-        
-        real_customers = real_response.data if real_response.data else []
-        
-        if real_customers:
-            st.write("**Recent customers with real names (for comparison):**")
-            
-            real_data = []
-            for customer in real_customers:
-                policies = customer.get('policies', [])
-                policy_number = policies[0]['policy_number'] if policies else 'N/A'
-                agent_code = policies[0]['agent_code'] if policies and policies[0].get('agent_code') else 'N/A'
-                
-                real_data.append({
-                    'Customer Name': customer['customer_name'],
-                    'Policy Number': policy_number,
-                    'Agent Code': agent_code
-                })
-            
-            df_real = pd.DataFrame(real_data)
-            st.dataframe(df_real, use_container_width=True)
-        
-    except Exception as e:
-        st.error(f"❌ Error in debug analysis: {e}")
 
 def show_manual_entry_forms():
     """Show forms for manually adding customers and policies"""
@@ -1647,62 +1579,6 @@ def main():
     
     else:
         st.info("👆 Use the search box above or click 'Show All' to view customers")
-    
-    # Show debugging section
-    with st.expander("🔧 Name Extraction Debugging"):
-        show_name_extraction_debug()
-        
-        st.markdown("### 💡 Improvement Suggestions")
-        st.markdown("""
-        **If you see many generic names, try these fixes:**
-        
-        1. **Re-process PDFs with improved processor:**
-           - Delete existing customers with generic names
-           - Re-run PDF processor on the same files
-        
-        2. **Check PDF formats:**
-           - Ensure PDFs have clear table structures
-           - Customer names should be in proper columns
-        
-        3. **Run the fix script:**
-           ```bash
-           python3 scripts/fix_customer_names.py
-           ```
-        
-        4. **Manual inspection:**
-           - Check error logs in `data/pdfs/errors/error_log.txt`
-           - Look at sample PDFs that generated generic names
-        """)
-        
-        # Add buttons for common actions
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            if st.button("🔄 Refresh Database Stats"):
-                st.cache_data.clear()
-                st.rerun()
-        
-        with col2:
-            if st.button("🤖 Try AI Processing"):
-                st.info("💡 Run the AI-powered processor to improve name extraction:")
-                st.code("python3 scripts/gemini_pdf_processor.py")
-                st.markdown("This uses Gemini 2.5 Pro to intelligently extract customer names from PDFs.")
-        
-        with col3:
-            if st.button("🚀 Try DUAL Processing"):
-                st.info("💡 Run both AI and Regex extraction on each file:")
-                st.code("python3 scripts/dual_pdf_processor.py")
-                st.markdown("This uses both Gemini AI and regex patterns, then merges the best results.")
-        
-        with col4:
-            if st.button("📊 Show Error Log Location"):
-                project_root = get_project_root()
-                error_log = project_root / "data" / "pdfs" / "errors" / "error_log.txt"
-                st.code(f"Error log: {error_log}")
-                if error_log.exists():
-                    st.success("✅ Error log exists")
-                else:
-                    st.warning("⚠️ No error log found")
 
 if __name__ == "__main__":
     main()
