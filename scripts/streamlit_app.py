@@ -1363,14 +1363,14 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    # Add mobile-friendly custom CSS
+    # Add mobile-friendly custom CSS with 3D effects
     st.markdown("""
         <style>
         /* Mobile responsive adjustments */
         @media (max-width: 768px) {
             .main .block-container {
-                padding-left: 1rem;
-                padding-right: 1rem;
+                padding-left: 0.5rem;
+                padding-right: 0.5rem;
                 max-width: 100%;
             }
             
@@ -1381,43 +1381,146 @@ def main():
             
             /* Reduce font sizes for mobile */
             h1 {
-                font-size: 1.8rem !important;
+                font-size: 1.5rem !important;
             }
             h2 {
-                font-size: 1.4rem !important;
-            }
-            h3 {
                 font-size: 1.2rem !important;
             }
+            h3 {
+                font-size: 1rem !important;
+            }
+            
+            /* Full width buttons on mobile */
+            .stButton button {
+                width: 100%;
+                padding: 0.75rem 1rem;
+            }
         }
         
-        /* Clean card styling */
+        /* 3D Card styling with shadows and depth */
         .stContainer {
-            background-color: #f8f9fa;
-            padding: 1rem;
-            border-radius: 0.5rem;
+            background: linear-gradient(145deg, #ffffff, #f0f0f0);
+            padding: 1.5rem;
+            border-radius: 15px;
             margin-bottom: 1rem;
+            box-shadow: 
+                0 10px 30px rgba(0, 0, 0, 0.1),
+                0 1px 8px rgba(0, 0, 0, 0.05),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
         
-        /* Better button styling */
+        .stContainer:hover {
+            transform: translateY(-5px);
+            box-shadow: 
+                0 15px 40px rgba(0, 0, 0, 0.15),
+                0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* 3D Button styling */
         .stButton button {
-            border-radius: 0.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            padding: 0.6rem 1.5rem;
+            transition: all 0.3s ease;
+            box-shadow: 
+                0 4px 15px rgba(102, 126, 234, 0.3),
+                0 2px 5px rgba(0, 0, 0, 0.1);
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            border: none;
+        }
+        
+        .stButton button:hover {
+            transform: translateY(-2px);
+            box-shadow: 
+                0 6px 20px rgba(102, 126, 234, 0.4),
+                0 3px 10px rgba(0, 0, 0, 0.15);
+        }
+        
+        .stButton button:active {
+            transform: translateY(0px);
+            box-shadow: 
+                0 2px 10px rgba(102, 126, 234, 0.3);
+        }
+        
+        /* 3D Input fields */
+        .stTextInput input, .stTextArea textarea {
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+            box-shadow: 
+                inset 0 2px 5px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .stTextInput input:focus, .stTextArea textarea:focus {
+            border-color: #667eea;
+            box-shadow: 
+                0 0 0 3px rgba(102, 126, 234, 0.1),
+                inset 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        
+        /* 3D Expander */
+        .streamlit-expanderHeader {
+            border-radius: 10px;
+            background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+            box-shadow: 
+                0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .streamlit-expanderHeader:hover {
+            box-shadow: 
+                0 4px 12px rgba(0, 0, 0, 0.15);
+            transform: translateY(-1px);
+        }
+        
+        /* Remove default margins for app-like feel */
+        .main {
+            background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%);
         }
         
         /* Improve spacing */
         .element-container {
             margin-bottom: 0.5rem;
         }
+        
+        /* 3D effect for metrics */
+        [data-testid="stMetric"] {
+            background: linear-gradient(145deg, #ffffff, #f0f0f0);
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 
+                0 4px 12px rgba(0, 0, 0, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+        }
+        
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        /* Hide Streamlit branding for app-like feel */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
         </style>
     """, unsafe_allow_html=True)
     
-    # Header with custom styling
+    # Header with custom styling and 3D effect
     st.markdown("""
-        <div style='text-align: center; padding: 1rem 0 0.5rem 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; margin-bottom: 1.5rem;'>
-            <h1 style='color: white; margin: 0; font-size: 2.5rem; font-weight: 700; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);'>
+        <div style='text-align: center; padding: 1.5rem 0 1rem 0; 
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    border-radius: 15px; 
+                    margin-bottom: 1.5rem;
+                    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4),
+                                0 5px 15px rgba(0, 0, 0, 0.1);'>
+            <h1 style='color: white; margin: 0; font-size: 2.5rem; font-weight: 700; 
+                       text-shadow: 3px 3px 6px rgba(0,0,0,0.3);
+                       letter-spacing: 1px;'>
                 🏢 AM's LIC Database
             </h1>
-            <p style='color: #f0f0f0; margin: 0.5rem 0 0 0; font-size: 1rem;'>
+            <p style='color: #f0f0f0; margin: 0.5rem 0 0 0; font-size: 1rem;
+                      text-shadow: 1px 1px 3px rgba(0,0,0,0.2);'>
                 Manage customers and policies efficiently
             </p>
         </div>
@@ -1444,8 +1547,8 @@ def main():
         show_setup_instructions()
         st.stop()
     
-    # Search and Add New Customer section (side by side)
-    col1, col2 = st.columns([5, 1])
+    # Search section with search button
+    col1, col2, col3 = st.columns([4, 1, 1])
     
     with col1:
         search_query = st.text_input(
@@ -1456,7 +1559,25 @@ def main():
     
     with col2:
         st.markdown("<div style='margin-top: 1.85rem;'></div>", unsafe_allow_html=True)
-        add_new_customer_btn = st.button("➕ Add Customer", type="primary", use_container_width=True)
+        search_button = st.button("🔍 Search", type="primary", use_container_width=True)
+    
+    with col3:
+        st.markdown("<div style='margin-top: 1.85rem;'></div>", unsafe_allow_html=True)
+        show_all_button = st.button("📋 Show All", use_container_width=True)
+    
+    # Add Customer button below search bar
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        add_new_customer_btn = st.button("➕ Add New Customer", type="primary", use_container_width=True)
+    
+    # Add Customer button below search bar
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        add_new_customer_btn = st.button("➕ Add New Customer", type="primary", use_container_width=True)
+    
+    st.markdown("---")
     
     # Show Add Customer form if button clicked
     if 'show_add_customer_form' not in st.session_state:
@@ -1466,19 +1587,9 @@ def main():
         st.session_state.show_add_customer_form = not st.session_state.show_add_customer_form
     
     if st.session_state.show_add_customer_form:
-        st.markdown("---")
         with st.expander("➕ Add New Customer & Policy", expanded=True):
             show_manual_entry_forms()
         st.markdown("---")
-    
-    # Search buttons
-    col1, col2 = st.columns([5, 1])
-    
-    with col1:
-        pass  # Empty for alignment
-    
-    with col2:
-        show_all_button = st.button("📋 Show All", use_container_width=True)
     
     # Initialize session state for search and editing
     if 'show_results' not in st.session_state:
@@ -1518,9 +1629,9 @@ def main():
             st.session_state.add_policy_customer_name = None
         st.stop()
     
-    # Perform search
+    # Perform search - on search button or show all button
     if search_button or show_all_button:
-        query = search_query if not show_all_button else ""
+        query = "" if show_all_button else search_query
         st.session_state.show_results = True
         st.session_state.search_query = query
         
