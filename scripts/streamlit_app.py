@@ -347,8 +347,6 @@ def display_customer_card(customer):
                             st.write("**Basic Information**")
                             st.write(f"📝 **Plan Type:** {policy.get('plan_type', 'N/A')}")
                             st.write(f"🏢 **Agent Code:** {policy.get('agent_code', 'N/A')}")
-                            st.write(f"👤 **Agent Name:** {policy.get('agent_name', 'N/A')}")
-                            st.write(f"⚡ **Status:** {policy.get('status', 'Active')}")
                         
                         with col2:
                             st.write("**Dates**")
