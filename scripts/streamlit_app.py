@@ -1411,8 +1411,17 @@ def main():
         </style>
     """, unsafe_allow_html=True)
     
-    # Header
-    st.title("🏢 AM's LIC Database")
+    # Header with custom styling
+    st.markdown("""
+        <div style='text-align: center; padding: 1rem 0 0.5rem 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; margin-bottom: 1.5rem;'>
+            <h1 style='color: white; margin: 0; font-size: 2.5rem; font-weight: 700; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);'>
+                🏢 AM's LIC Database
+            </h1>
+            <p style='color: #f0f0f0; margin: 0.5rem 0 0 0; font-size: 1rem;'>
+                Manage customers and policies efficiently
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
     
     # Sidebar with project info
     with st.sidebar:
@@ -1435,35 +1444,45 @@ def main():
         show_setup_instructions()
         st.stop()
     
-    # Database stats
-    show_database_stats()
-    
-    st.markdown("---")
-    
-    # Manual entry section
-    with st.expander("➕ Add New Customer & Policy", expanded=False):
-        show_manual_entry_forms()
-    
-    st.markdown("---")
-    
-    # Search section
-    st.markdown("### 🔍 Search Customers")
-    
-    # Search input and buttons
-    col1, col2, col3 = st.columns([4, 1, 1])
+    # Search and Add New Customer section (side by side)
+    col1, col2 = st.columns([5, 1])
     
     with col1:
         search_query = st.text_input(
-            "Search by policy number, customer name, phone, or agent code:",
-            placeholder="Enter search terms...",
-            label_visibility="collapsed"
+            "🔍 Search customers by name, phone, policy number, or agent code",
+            placeholder="Start typing to search...",
+            label_visibility="visible"
         )
     
     with col2:
-        search_button = st.button("🔍 Search", type="primary", width="stretch")
+        st.markdown("<div style='margin-top: 1.85rem;'></div>", unsafe_allow_html=True)
+        add_new_customer_btn = st.button("➕ Add Customer", type="primary", use_container_width=True)
     
-    with col3:
-        show_all_button = st.button("📋 Show All", width="stretch")
+    with col2:
+        st.markdown("<div style='margin-top: 1.85rem;'></div>", unsafe_allow_html=True)
+        add_new_customer_btn = st.button("➕ Add Customer", type="primary", use_container_width=True)
+    
+    # Show Add Customer form if button clicked
+    if 'show_add_customer_form' not in st.session_state:
+        st.session_state.show_add_customer_form = False
+    
+    if add_new_customer_btn:
+        st.session_state.show_add_customer_form = not st.session_state.show_add_customer_form
+    
+    if st.session_state.show_add_customer_form:
+        st.markdown("---")
+        with st.expander("➕ Add New Customer & Policy", expanded=True):
+            show_manual_entry_forms()
+        st.markdown("---")
+    
+    # Search buttons
+    col1, col2 = st.columns([5, 1])
+    
+    with col1:
+        pass  # Empty for alignment
+    
+    with col2:
+        show_all_button = st.button("📋 Show All", use_container_width=True)
     
     # Initialize session state for search and editing
     if 'show_results' not in st.session_state:
