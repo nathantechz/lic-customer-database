@@ -529,23 +529,6 @@ def display_customer_card(customer):
                         st.markdown("---")
         else:
             st.info("No policies found for this customer")
-        
-        # Add Policy button for this customer
-        st.markdown("---")
-        col1, col2, col3 = st.columns([1, 1, 2])
-        with col1:
-            add_policy_key = f"add_policy_btn_{customer['customer_id']}"
-            if st.button("➕ Add Policy", key=add_policy_key, type="secondary"):
-                st.session_state.add_policy_customer_id = customer['customer_id']
-                st.session_state.add_policy_customer_name = customer['customer_name']
-                st.rerun()
-        
-        with col2:
-            policy_count = len(customer['policies'])
-            if policy_count > 0:
-                st.info(f"📋 {policy_count} policies")
-            else:
-                st.warning("No policies yet")
 
 def display_policy_edit_form(policy):
     """Display policy edit form"""
