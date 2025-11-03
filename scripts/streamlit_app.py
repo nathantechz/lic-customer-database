@@ -345,7 +345,7 @@ def display_customer_card(customer):
                         
                         with col1:
                             st.write("**Basic Information**")
-                            st.write(f"📝 **Plan Type:** {policy.get('plan_type', 'N/A')}")
+                            st.write(f"📝 **Plan Name:** {policy.get('plan_name', 'N/A')}")
                             st.write(f"🏢 **Agent Code:** {policy.get('agent_code', 'N/A')}")
                         
                         with col2:
@@ -430,7 +430,7 @@ def display_policy_edit_form(policy):
         col1, col2 = st.columns(2)
         
         with col1:
-            plan_type = st.text_input("Plan Type", value=policy.get('plan_type', '') or '')
+            plan_name = st.text_input("Plan Name", value=policy.get('plan_name', '') or '')
             agent_code = st.text_input("Agent Code", value=policy.get('agent_code', '') or '')
             payment_term = st.selectbox("Payment Term", 
                                       options=['Yearly', 'Half-Yearly', 'Quarterly', 'Monthly', 'One-time'], 
@@ -439,7 +439,7 @@ def display_policy_edit_form(policy):
                                            if policy.get('payment_period') in ['Yearly', 'Half-Yearly', 'Quarterly', 'Monthly', 'One-time'] else 0))
         
         with col2:
-            plan_name = st.text_input("Plan Name", value=policy.get('plan_name', '') or '')
+            pass  # Empty column for now
         
         # Dates
         st.markdown("**Dates**")
@@ -499,7 +499,6 @@ def display_policy_edit_form(policy):
         
         if submit_button:
             updates = {
-                'plan_type': plan_type,
                 'plan_name': plan_name,
                 'agent_code': agent_code,
                 'payment_period': payment_term,
@@ -569,7 +568,7 @@ def update_policy_details(policy_number, updates):
         update_data = {}
         
         for field, value in updates.items():
-            if field in ['agent_code', 'plan_type', 'plan_name', 
+            if field in ['agent_code', 'plan_name', 
                         'date_of_commencement', 'payment_period', 'current_fup_date', 
                         'sum_assured', 'premium_amount', 'status', 'maturity_date', 
                         'policy_term', 'last_payment_date']:
@@ -713,7 +712,6 @@ def add_new_policy(policy_data, customer_id, document_date=None):
                 'policy_number': policy_data.get('policy_number'),
                 'customer_id': customer_id,
                 'agent_code': policy_data.get('agent_code'),
-                'plan_type': policy_data.get('plan_type'),
                 'plan_name': policy_data.get('plan_name'),
                 'date_of_commencement': policy_data.get('date_of_commencement'),
                 'payment_period': policy_data.get('payment_period'),
@@ -1147,7 +1145,7 @@ def show_manual_entry_forms():
             if supabase:
                 try:
                     response = supabase.table('policies').select(
-                        'policy_number, plan_type, status, premium_amount'
+                        'policy_number, plan_name, status, premium_amount'
                     ).eq('customer_id', selected_existing_customer_id).order('policy_number').execute()
                     
                     existing_policies = response.data if response.data else []
@@ -1157,9 +1155,9 @@ def show_manual_entry_forms():
                         for policy in existing_policies:
                             premium_amount = policy.get('premium_amount')
                             premium_text = f"₹{premium_amount:,.2f}" if premium_amount else "N/A"
-                            plan_type = policy.get('plan_type') or 'N/A'
+                            plan_name = policy.get('plan_name') or 'N/A'
                             status = policy.get('status') or 'Active'
-                            st.write(f"• **{policy['policy_number']}** - {plan_type} - {status} - {premium_text}")
+                            st.write(f"• **{policy['policy_number']}** - {plan_name} - {status} - {premium_text}")
                     else:
                         st.info("No existing policies found for this customer.")
                     
@@ -1173,14 +1171,13 @@ def show_manual_entry_forms():
                 
                 with col1:
                     new_policy_number = st.text_input("Policy Number*", placeholder="New policy number")
-                    new_plan_type = st.text_input("Plan Type", placeholder="e.g., 075-20")
+                    new_plan_name = st.text_input("Plan Name", placeholder="e.g., 075-20, 814-15")
                     new_agent_code = st.text_input("Agent Code", placeholder="Agent code")
                     new_payment_term = st.selectbox("Payment Term", 
                                                   options=['', 'Yearly', 'Half-Yearly', 'Quarterly', 'Monthly', 'One-time'])
                     new_premium_amount = st.number_input("Premium Amount (₹)", min_value=0.0, value=0.0)
                 
                 with col2:
-                    new_plan_name = st.text_input("Plan Name", placeholder="Plan description")
                     new_sum_assured = st.number_input("Sum Assured (₹)", min_value=0.0, value=0.0)
                     new_policy_term = st.number_input("Policy Term (Years)", min_value=0, value=0)
                 
@@ -1224,7 +1221,6 @@ def show_manual_entry_forms():
                     else:
                         new_policy_data = {
                             'policy_number': new_policy_number,
-                            'plan_type': new_plan_type or None,
                             'plan_name': new_plan_name or None,
                             'agent_code': new_agent_code or None,
                             'payment_period': new_payment_term if new_payment_term else None,
@@ -1278,14 +1274,13 @@ def show_add_policy_form(customer_id, customer_name):
         
         with col1:
             new_policy_number = st.text_input("Policy Number*", placeholder="New policy number")
-            new_plan_type = st.text_input("Plan Type", placeholder="e.g., 075-20")
+            new_plan_name = st.text_input("Plan Name", placeholder="e.g., 075-20, 814-15")
             new_agent_code = st.text_input("Agent Code", placeholder="Agent code")
             new_payment_term = st.selectbox("Payment Term", 
                                           options=['', 'Yearly', 'Half-Yearly', 'Quarterly', 'Monthly', 'One-time'])
             new_premium_amount = st.number_input("Premium Amount (₹)", min_value=0.0, value=0.0)
         
         with col2:
-            new_plan_name = st.text_input("Plan Name", placeholder="Plan description")
             new_sum_assured = st.number_input("Sum Assured (₹)", min_value=0.0, value=0.0)
             new_policy_term = st.number_input("Policy Term (Years)", min_value=0, value=0)
         
@@ -1327,7 +1322,6 @@ def show_add_policy_form(customer_id, customer_name):
             else:
                 new_policy_data = {
                     'policy_number': new_policy_number,
-                    'plan_type': new_plan_type or None,
                     'plan_name': new_plan_name or None,
                     'agent_code': new_agent_code or None,
                     'payment_period': new_payment_term if new_payment_term else None,

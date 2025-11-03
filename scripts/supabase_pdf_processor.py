@@ -154,19 +154,38 @@ def parse_date(date_str):
 
 def normalize_sum_assured(value):
     """
-    Normalize sum assured to lacs format:
-    - If value is 50, keep as 50 (meaning 50,000)
-    - Otherwise convert to lacs (e.g., 1 → 1, 2 → 2, 100 → 100 for lacs)
-    - Returns the value in consistent format for database
+    Normalize sum assured to actual rupee values with minimum ₹50,000:
+    - Any value less than 1000 is assumed to be abbreviated
+    - Values < 50 → multiply by 100,000 (lacs) - e.g., 1 → 1,00,000, 2 → 2,00,000, 5 → 5,00,000
+    - Values 50-999 → multiply by 1,000 (thousands) - e.g., 50 → 50,000, 100 → 1,00,000
+    - Values >= 1000 → keep as is (already in proper format)
+    - Minimum value after conversion: ₹50,000
     """
     if value is None or value == '':
         return None
     
     try:
         val = float(value)
-        # Value is already in the correct format from PDF
-        # Just return it as is
-        return val
+        
+        # If value is less than 50, it's in lacs
+        if 0 < val < 50:
+            converted = val * 100000  # 1 → 1,00,000 (1 lac), 5 → 5,00,000
+        
+        # If value is between 50 and 999, it's in thousands
+        elif 50 <= val < 1000:
+            converted = val * 1000  # 50 → 50,000, 100 → 1,00,000
+        
+        # If value is 1000 or more, assume it's already in proper format
+        else:
+            converted = val
+        
+        # Ensure minimum sum assured of ₹50,000
+        if converted < 50000:
+            print(f"⚠️  Warning: Sum assured {val} → ₹{converted:,.2f} is below minimum ₹50,000. Setting to ₹50,000")
+            return 50000
+        
+        return converted
+            
     except (ValueError, TypeError):
         return None
 
