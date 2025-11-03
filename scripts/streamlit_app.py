@@ -410,6 +410,7 @@ def display_customer_card(customer, card_index=0):
         
         with col3:
             st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>📞 <strong>Alt Phone:</strong> {customer.get('alt_phone_number') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🏠 <strong>Address:</strong> {customer.get('full_address') or 'N/A'}</p>", unsafe_allow_html=True)
             st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🔄 <strong>Updated:</strong> {customer.get('last_updated') or 'N/A'}</p>", unsafe_allow_html=True)
             
         st.markdown("</div>", unsafe_allow_html=True)
