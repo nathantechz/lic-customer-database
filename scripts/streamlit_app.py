@@ -464,27 +464,27 @@ def display_customer_card(customer):
                         with col1:
                             commencement = policy.get('date_of_commencement', 'N/A')
                             if commencement and commencement != 'N/A' and str(commencement).strip():
-                                st.markdown(f"🗓️ **Commencement:** {commencement}")
+                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🗓️ <strong>Commencement:</strong> {commencement}</p>", unsafe_allow_html=True)
                             else:
-                                st.markdown("🗓️ **Commencement:** 📄 *Premium Due only*")
+                                st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🗓️ <strong>Commencement:</strong> 📄 <em>Premium Due only</em></p>", unsafe_allow_html=True)
                         
                         with col2:
                             fup_date = policy.get('current_fup_date', 'N/A')
                             if fup_date and fup_date != 'N/A' and str(fup_date).strip():
-                                st.markdown(f"📅 **FUP (Next Due):** {fup_date}")
+                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>📅 <strong>FUP (Next Due):</strong> {fup_date}</p>", unsafe_allow_html=True)
                             else:
                                 if policy.get('latest_premium') and policy['latest_premium'].get('due_date'):
                                     due_date = policy['latest_premium']['due_date']
-                                    st.markdown(f"📅 **Latest Due:** {due_date}")
+                                    st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>📅 <strong>Latest Due:</strong> {due_date}</p>", unsafe_allow_html=True)
                                 else:
-                                    st.markdown("📅 **FUP:** 💳 *Premium Due only*")
+                                    st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>📅 <strong>FUP:</strong> 💳 <em>Premium Due only</em></p>", unsafe_allow_html=True)
                         
                         with col3:
                             last_payment = policy.get('last_payment_date', 'N/A')
                             if last_payment and last_payment != 'N/A' and str(last_payment).strip():
-                                st.markdown(f"💳 **Last Payment:** {last_payment}")
+                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>💳 <strong>Last Payment:</strong> {last_payment}</p>", unsafe_allow_html=True)
                             else:
-                                st.markdown("💳 **Last Payment:** Not recorded")
+                                st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>💳 <strong>Last Payment:</strong> Not recorded</p>", unsafe_allow_html=True)
                         
                         st.markdown("</div>", unsafe_allow_html=True)
                         
@@ -500,15 +500,15 @@ def display_customer_card(customer):
                         with col1:
                             premium_amount = policy.get('premium_amount')
                             if premium_amount:
-                                st.markdown(f"💰 **Premium Amount:** ₹{premium_amount:,.2f}")
+                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>💰 <strong>Premium Amount:</strong> ₹{premium_amount:,.2f}</p>", unsafe_allow_html=True)
                             else:
-                                st.markdown("💰 **Premium Amount:** Not Available")
+                                st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>💰 <strong>Premium Amount:</strong> Not Available</p>", unsafe_allow_html=True)
                             
                             sum_assured = policy.get('sum_assured')
                             if sum_assured:
-                                st.markdown(f"🏦 **Sum Assured:** ₹{sum_assured:,.2f}")
+                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🏦 <strong>Sum Assured:</strong> ₹{sum_assured:,.2f}</p>", unsafe_allow_html=True)
                             else:
-                                st.markdown("🏦 **Sum Assured:** Not Available")
+                                st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🏦 <strong>Sum Assured:</strong> Not Available</p>", unsafe_allow_html=True)
                         
                         with col2:
                             # Show due count prominently if available
