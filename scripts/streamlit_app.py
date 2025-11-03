@@ -157,30 +157,107 @@ def find_potential_duplicates(customers):
     return potential_duplicates
 
 def search_customers(query=""):
-    """Search customers in the database with duplicate detection"""
+    """Search customers in the database with duplicate detection - searches by name, phone, address, aadhaar, policy number, and premium amount"""
     supabase = get_database_connection()
     if not supabase:
         return [], 0
     
     try:
         if query:
-            # Search across multiple fields using Supabase's or filter
+            # First, search in customers table by name, phone, email, aadhaar, nickname, address
             response = supabase.table('customers').select(
                 '*, policies(*, premium_records(*))'
             ).or_(
                 f'customer_name.ilike.%{query}%,'
                 f'phone_number.ilike.%{query}%,'
+                f'alt_phone_number.ilike.%{query}%,'
                 f'email.ilike.%{query}%,'
                 f'aadhaar_number.ilike.%{query}%,'
-                f'nickname.ilike.%{query}%'
+                f'nickname.ilike.%{query}%,'
+                f'full_address.ilike.%{query}%'
             ).order('customer_name').execute()
+            
+            customers_dict = {}
+            if response.data:
+                for customer in response.data:
+                    customers_dict[customer['customer_id']] = customer
+            
+            # Also search in policies table for policy number, agent code, and premium amount
+            try:
+                # Try to parse query as a number for premium search
+                query_as_number = None
+                try:
+                    query_as_number = float(query.replace(',', '').replace('₹', '').strip())
+                except:
+                    pass
+                
+                # Search policies by policy number or agent code
+                policy_search_filter = f'policy_number.ilike.%{query}%,agent_code.ilike.%{query}%'
+                
+                # Add premium amount search if query is a number
+                if query_as_number is not None:
+                    # Search for premiums within ±10% of the query amount (rounded search)
+                    min_premium = query_as_number * 0.9
+                    max_premium = query_as_number * 1.1
+                    
+                    # Get policies matching policy number/agent code
+                    policy_response = supabase.table('policies').select(
+                        'customer_id, policy_number, premium_amount, agent_code, premium_records(*)'
+                    ).or_(policy_search_filter).execute()
+                    
+                    # Also get policies with matching premium amounts
+                    premium_response = supabase.table('policies').select(
+                        'customer_id, policy_number, premium_amount, agent_code, premium_records(*)'
+                    ).gte('premium_amount', min_premium).lte('premium_amount', max_premium).execute()
+                    
+                    # Combine results
+                    all_policies = []
+                    if policy_response.data:
+                        all_policies.extend(policy_response.data)
+                    if premium_response.data:
+                        # Add premium matches, avoiding duplicates
+                        existing_policy_numbers = {p['policy_number'] for p in all_policies}
+                        for p in premium_response.data:
+                            if p['policy_number'] not in existing_policy_numbers:
+                                all_policies.append(p)
+                else:
+                    # Just search by policy number and agent code
+                    policy_response = supabase.table('policies').select(
+                        'customer_id, policy_number, premium_amount, agent_code, premium_records(*)'
+                    ).or_(policy_search_filter).execute()
+                    all_policies = policy_response.data if policy_response.data else []
+                
+                # Get customer IDs from matching policies
+                customer_ids_from_policies = set()
+                for policy in all_policies:
+                    customer_id = policy.get('customer_id')
+                    if customer_id:
+                        customer_ids_from_policies.add(customer_id)
+                
+                # Fetch customers for these policy matches if not already in results
+                if customer_ids_from_policies:
+                    missing_customer_ids = customer_ids_from_policies - set(customers_dict.keys())
+                    if missing_customer_ids:
+                        missing_customers_response = supabase.table('customers').select(
+                            '*, policies(*, premium_records(*))'
+                        ).in_('customer_id', list(missing_customer_ids)).execute()
+                        
+                        if missing_customers_response.data:
+                            for customer in missing_customers_response.data:
+                                customers_dict[customer['customer_id']] = customer
+            
+            except Exception as e:
+                # If policy search fails, just continue with customer results
+                pass
+            
+            # Convert dict back to list
+            customers = list(customers_dict.values())
         else:
             # Get first 100 customers
             response = supabase.table('customers').select(
                 '*, policies(*, premium_records(*))'
             ).order('customer_name').limit(100).execute()
-        
-        customers = response.data if response.data else []
+            customers = response.data if response.data else []
         
         # Process customers data
         customers_with_policies = []
@@ -1548,7 +1625,7 @@ def main():
         st.stop()
     
     # Search section with search button
-    col1, col2, col3 = st.columns([4, 1, 1])
+    col1, col2 = st.columns([4, 1])
     
     with col1:
         search_query = st.text_input(
@@ -1560,16 +1637,6 @@ def main():
     with col2:
         st.markdown("<div style='margin-top: 1.85rem;'></div>", unsafe_allow_html=True)
         search_button = st.button("🔍 Search", type="primary", use_container_width=True)
-    
-    with col3:
-        st.markdown("<div style='margin-top: 1.85rem;'></div>", unsafe_allow_html=True)
-        show_all_button = st.button("📋 Show All", use_container_width=True)
-    
-    # Add Customer button below search bar
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        add_new_customer_btn = st.button("➕ Add New Customer", type="primary", use_container_width=True)
     
     # Add Customer button below search bar
     st.markdown("---")
@@ -1629,9 +1696,9 @@ def main():
             st.session_state.add_policy_customer_name = None
         st.stop()
     
-    # Perform search - on search button or show all button
-    if search_button or show_all_button:
-        query = "" if show_all_button else search_query
+    # Perform search - on search button
+    if search_button:
+        query = search_query
         st.session_state.show_results = True
         st.session_state.search_query = query
         
