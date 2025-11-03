@@ -359,40 +359,56 @@ def display_customer_card(customer):
                            f"🎂 DOB: {other_customer.get('date_of_birth', 'N/A')}")
                     st.markdown("---")
         
-        # Customer details in columns
+        # Customer details in compact 3D highlighted sections
+        st.markdown("""
+            <div style='background: linear-gradient(145deg, #ffffff, #f8f9fa); 
+                        padding: 1rem; border-radius: 12px; margin-bottom: 0.8rem;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);'>
+        """, unsafe_allow_html=True)
+        
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.write("🏷️ **Nickname:**", customer.get('nickname') or 'N/A')
-            st.write("📞 **Phone:**", customer.get('phone_number') or 'N/A')
-            st.write("📧 **Email:**", customer.get('email') or 'N/A')
+            st.markdown(f"🏷️ **Nickname:** {customer.get('nickname') or 'N/A'}")
+            st.markdown(f"📞 **Phone:** {customer.get('phone_number') or 'N/A'}")
+            st.markdown(f"📧 **Email:** {customer.get('email') or 'N/A'}")
         
         with col2:
-            st.write("💼 **Occupation:**", customer.get('occupation') or 'N/A')
-            st.write("🆔 **Aadhaar:**", customer.get('aadhaar_number') or 'N/A')
-            st.write("🎂 **DOB:**", customer.get('date_of_birth') or 'N/A')
+            st.markdown(f"💼 **Occupation:** {customer.get('occupation') or 'N/A'}")
+            st.markdown(f"🆔 **Aadhaar:** {customer.get('aadhaar_number') or 'N/A'}")
+            st.markdown(f"🎂 **DOB:** {customer.get('date_of_birth') or 'N/A'}")
         
         with col3:
-            st.write("📞 **Alt Phone:**", customer.get('alt_phone_number') or 'N/A')
-            st.write("📅 **Created:**", customer.get('created_date') or 'N/A')
-            st.write("🔄 **Updated:**", customer.get('last_updated') or 'N/A')
+            st.markdown(f"📞 **Alt Phone:** {customer.get('alt_phone_number') or 'N/A'}")
+            st.markdown(f"� **Updated:** {customer.get('last_updated') or 'N/A'}")
             
-        # Address (can be long, so separate row)
-        if customer.get('full_address'):
-            st.write("🏠 **Address:**", customer.get('full_address'))
-        else:
-            st.write("🏠 **Address:** N/A")
+        st.markdown("</div>", unsafe_allow_html=True)
         
-        # Google Maps link with clickable option
-        if customer.get('google_maps_link'):
-            st.write("🗺️ **Location:**")
-            st.markdown(f"[📍 Open in Google Maps]({customer.get('google_maps_link')})")
-        else:
-            st.write("🗺️ **Location:** Not available")
+        # Address and location in separate 3D section
+        if customer.get('full_address') or customer.get('google_maps_link'):
+            st.markdown("""
+                <div style='background: linear-gradient(145deg, #ffffff, #f8f9fa); 
+                            padding: 1rem; border-radius: 12px; margin-bottom: 0.8rem;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);'>
+            """, unsafe_allow_html=True)
+            
+            if customer.get('full_address'):
+                st.markdown(f"🏠 **Address:** {customer.get('full_address')}")
+            
+            if customer.get('google_maps_link'):
+                st.markdown(f"[📍 Open in Google Maps]({customer.get('google_maps_link')})")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
         
         # Notes (if any)
         if customer.get('notes'):
-            st.write("📝 **Notes:**", customer.get('notes'))
+            st.markdown("""
+                <div style='background: linear-gradient(145deg, #fffef0, #faf9e8); 
+                            padding: 1rem; border-radius: 12px; margin-bottom: 0.8rem;
+                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);'>
+            """, unsafe_allow_html=True)
+            st.markdown(f"📝 **Notes:** {customer.get('notes')}")
+            st.markdown("</div>", unsafe_allow_html=True)
         
         # Enhanced Policies section with edit functionality
         if customer['policies']:
@@ -417,60 +433,84 @@ def display_customer_card(customer):
                     if st.session_state.get(edit_mode_key, False):
                         display_policy_edit_form(policy)
                     else:
-                        # Display mode - Basic policy information in columns
+                        # Display mode - Policy information in compact 3D sections
+                        
+                        # Basic Information Section (3D highlight)
+                        st.markdown("""
+                            <div style='background: linear-gradient(145deg, #e8f4fd, #d6ebf5); 
+                                        padding: 0.8rem; border-radius: 10px; margin-bottom: 0.6rem;
+                                        box-shadow: 0 3px 10px rgba(102, 126, 234, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6);'>
+                        """, unsafe_allow_html=True)
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"📝 **Plan Name:** {policy.get('plan_name', 'N/A')}")
+                            st.markdown(f"🏢 **Agent Code:** {policy.get('agent_code', 'N/A')}")
+                        with col2:
+                            payment_period = policy.get('payment_period', 'N/A')
+                            st.markdown(f"📆 **Payment Term:** {payment_period}")
+                        
+                        st.markdown("</div>", unsafe_allow_html=True)
+                        
+                        # Dates Section (3D highlight)
+                        st.markdown("""
+                            <div style='background: linear-gradient(145deg, #fef5e7, #fdebd0); 
+                                        padding: 0.8rem; border-radius: 10px; margin-bottom: 0.6rem;
+                                        box-shadow: 0 3px 10px rgba(243, 156, 18, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6);'>
+                        """, unsafe_allow_html=True)
+                        
                         col1, col2, col3 = st.columns(3)
                         
                         with col1:
-                            st.write("**Basic Information**")
-                            st.write(f"📝 **Plan Name:** {policy.get('plan_name', 'N/A')}")
-                            st.write(f"🏢 **Agent Code:** {policy.get('agent_code', 'N/A')}")
-                            
-                            # Payment Term
-                            payment_period = policy.get('payment_period', 'N/A')
-                            st.write(f"📆 **Payment Term:** {payment_period}")
-                        
-                        with col2:
-                            st.write("**Dates**")
                             commencement = policy.get('date_of_commencement', 'N/A')
                             if commencement and commencement != 'N/A' and str(commencement).strip():
-                                st.write(f"🗓️ **Commencement:** {commencement}")
+                                st.markdown(f"🗓️ **Commencement:** {commencement}")
                             else:
-                                st.write("🗓️ **Commencement:** 📄 *Only in Premium Due files*")
-                            
+                                st.markdown("🗓️ **Commencement:** 📄 *Premium Due only*")
+                        
+                        with col2:
                             fup_date = policy.get('current_fup_date', 'N/A')
                             if fup_date and fup_date != 'N/A' and str(fup_date).strip():
-                                st.write(f"📅 **FUP (Next Due):** {fup_date}")
+                                st.markdown(f"📅 **FUP (Next Due):** {fup_date}")
                             else:
-                                # Check if there's premium record data
                                 if policy.get('latest_premium') and policy['latest_premium'].get('due_date'):
                                     due_date = policy['latest_premium']['due_date']
-                                    st.write(f"📅 **Latest Due:** {due_date}")
+                                    st.markdown(f"📅 **Latest Due:** {due_date}")
                                 else:
-                                    st.write("📅 **FUP:** 💳 *Only in Premium Due files*")
-                            
-                            # Last Payment Date
-                            last_payment = policy.get('last_payment_date', 'N/A')
-                            if last_payment and last_payment != 'N/A' and str(last_payment).strip():
-                                st.write(f"💳 **Last Payment:** {last_payment}")
-                            else:
-                                st.write("💳 **Last Payment:** Not recorded")
-                            
-                            st.write(f"📄 **Data From:** {policy.get('created_date', 'N/A')}")
+                                    st.markdown("📅 **FUP:** 💳 *Premium Due only*")
                         
                         with col3:
-                            st.write("**Financial Information**")
+                            last_payment = policy.get('last_payment_date', 'N/A')
+                            if last_payment and last_payment != 'N/A' and str(last_payment).strip():
+                                st.markdown(f"💳 **Last Payment:** {last_payment}")
+                            else:
+                                st.markdown("💳 **Last Payment:** Not recorded")
+                        
+                        st.markdown("</div>", unsafe_allow_html=True)
+                        
+                        # Financial Information Section (3D highlight)
+                        st.markdown("""
+                            <div style='background: linear-gradient(145deg, #e8f8f5, #d0f0e8); 
+                                        padding: 0.8rem; border-radius: 10px; margin-bottom: 0.6rem;
+                                        box-shadow: 0 3px 10px rgba(46, 204, 113, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6);'>
+                        """, unsafe_allow_html=True)
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
                             premium_amount = policy.get('premium_amount')
                             if premium_amount:
-                                st.write(f"💰 **Premium Amount:** ₹{premium_amount:,.2f}")
+                                st.markdown(f"💰 **Premium Amount:** ₹{premium_amount:,.2f}")
                             else:
-                                st.write("💰 **Premium Amount:** Not Available")
+                                st.markdown("💰 **Premium Amount:** Not Available")
                             
                             sum_assured = policy.get('sum_assured')
                             if sum_assured:
-                                st.write(f"🏦 **Sum Assured:** ₹{sum_assured:,.2f}")
+                                st.markdown(f"🏦 **Sum Assured:** ₹{sum_assured:,.2f}")
                             else:
-                                st.write("🏦 **Sum Assured:** Not Available")
-                            
+                                st.markdown("🏦 **Sum Assured:** Not Available")
+                        
+                        with col2:
                             # Show due count prominently if available
                             if policy.get('latest_premium') and policy['latest_premium'].get('due_count'):
                                 due_count = policy['latest_premium']['due_count']
@@ -478,6 +518,8 @@ def display_customer_card(customer):
                                     st.warning(f"⚠️ **{due_count} Premiums Due**")
                                 else:
                                     st.info(f"ℹ️ **{due_count} Premium Due**")
+                        
+                        st.markdown("</div>", unsafe_allow_html=True)
                         
                     if i < len(customer['policies']) - 1:
                         st.markdown("---")
@@ -1629,8 +1671,8 @@ def main():
     
     with col1:
         search_query = st.text_input(
-            "🔍 Search customers by name, phone, policy number, or agent code",
-            placeholder="Start typing to search...",
+            "🔍 Search by name, phone, address, Aadhaar, policy number, agent code, or premium amount",
+            placeholder="Type customer name, phone, address, policy number, premium amount...",
             label_visibility="visible"
         )
     
@@ -1745,9 +1787,6 @@ def main():
                 st.warning(f"🔍 No customers found matching: **{query}**")
             else:
                 st.info("📋 No customers in database yet. Process some PDFs first!")
-    
-    else:
-        st.info("👆 Use the search box above or click 'Show All' to view customers")
 
 if __name__ == "__main__":
     main()
