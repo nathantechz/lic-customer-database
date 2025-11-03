@@ -347,6 +347,10 @@ def display_customer_card(customer):
                             st.write("**Basic Information**")
                             st.write(f"📝 **Plan Name:** {policy.get('plan_name', 'N/A')}")
                             st.write(f"🏢 **Agent Code:** {policy.get('agent_code', 'N/A')}")
+                            
+                            # Payment Term
+                            payment_period = policy.get('payment_period', 'N/A')
+                            st.write(f"📆 **Payment Term:** {payment_period}")
                         
                         with col2:
                             st.write("**Dates**")

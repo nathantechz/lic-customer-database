@@ -283,6 +283,15 @@ def extract_premium_due_details(text):
     
     print("    💳 Parsing premium due table...")
     
+    # Extract agent code from top of PDF (e.g., "LIC0163674N" → "0163674N")
+    agent_code = None
+    for line in lines[:20]:  # Check first 20 lines for agent code
+        agent_match = re.search(r'LIC(\d{7}N)', line)
+        if agent_match:
+            agent_code = agent_match.group(1)
+            print(f"    🏢 Agent Code extracted: {agent_code}")
+            break
+    
     for line in lines:
         line_clean = line.strip()
         if not line_clean or line_clean.startswith('S.No') or 'PolicyNo' in line:
@@ -307,6 +316,17 @@ def extract_premium_due_details(text):
                 parsed_doc = parse_date(doc_date)
                 parsed_fup = parse_date(fup_date)
                 
+                # Map payment mode from PDF format to database format
+                # Hly → Half-Yearly, Qly → Quarterly, Yly → Yearly, Mly → Monthly
+                payment_mode_map = {
+                    'Hly': 'Half-Yearly',
+                    'Qly': 'Quarterly',
+                    'Yly': 'Yearly',
+                    'Mly': 'Monthly',
+                    'SSS': 'One-time'
+                }
+                payment_period = payment_mode_map.get(mode, mode)  # Use mapping or keep original
+                
                 # Extract amounts
                 amounts = re.findall(r'(\d+\.?\d*)', remaining)
                 inst_prem = None
@@ -317,17 +337,23 @@ def extract_premium_due_details(text):
                     except ValueError:
                         pass
                 
-                details.append({
+                policy_details = {
                     'policy_number': policy_no,
                     'customer_name': cleaned_name,
                     'date_of_commencement': parsed_doc,
                     'plan_name': plan_type,
-                    'payment_period': mode,
+                    'payment_period': payment_period,
                     'current_fup_date': parsed_fup,
                     'premium_amount': inst_prem
-                })
+                }
                 
-                print(f"    ✅ {policy_no} → {cleaned_name} (FUP: {fup_date})")
+                # Add agent code if extracted from PDF
+                if agent_code:
+                    policy_details['agent_code'] = agent_code
+                
+                details.append(policy_details)
+                
+                print(f"    ✅ {policy_no} → {cleaned_name} (FUP: {fup_date}, Mode: {payment_period})")
     
     return details
 
@@ -380,20 +406,16 @@ def find_or_create_customer(supabase: Client, customer_name: str, existing_custo
 
 def sync_policy_to_supabase(supabase: Client, policy_data: dict, existing_policies: dict, 
                             existing_customers: dict, agent_code: str, stats: dict, 
-                            local_conn: sqlite3.Connection = None, is_commission_pdf: bool = False):
+                            local_conn: sqlite3.Connection = None, is_commission_pdf: bool = False,
+                            is_premium_due_pdf: bool = False):
     """
     Sync a single policy to Supabase AND local database following the rules:
     1. Create new policy if doesn't exist
     2. Update FUP if PDF has later date
     3. Update premium amount (fixed)
     4. Normalize sum_assured
-    5. Update agent_code if not present
-    
-    Commission PDF specific rules:
-    - Use agent code from PDF header (stored in policy_data['agent_code_from_pdf'])
-    - Customer name from P/H Name column is final - update DB if different
-    - Plan type (pln/tm) from PDF is final - always update
-    - Premium amount from "Premium" column is final - always update
+    5. For Premium Due PDFs: agent_code and payment_period are final (update if missing or wrong)
+    6. For Commission PDFs: customer name, plan_name, and premium are final
     """
     policy_number = policy_data['policy_number']
     customer_name = policy_data['customer_name']
@@ -495,19 +517,33 @@ def sync_policy_to_supabase(supabase: Client, policy_data: dict, existing_polici
             if existing.get('plan_name') != fields_to_update['plan_name']:
                 print(f"  📋 Updating plan type: {existing.get('plan_name')} → {fields_to_update['plan_name']}")
         
-        # Rule 4: Update agent_code if not present OR if from commission PDF header
+        # Rule 4: Update agent_code if not present OR if from commission/premium PDF header
         if agent_code:
             if not existing.get('agent_code'):
                 updates['agent_code'] = agent_code
                 print(f"  👤 Adding agent code: {agent_code}")
-            elif is_commission_pdf and existing.get('agent_code') != agent_code:
-                # Commission PDF agent code is authoritative
+            elif (is_commission_pdf or is_premium_due_pdf) and existing.get('agent_code') != agent_code:
+                # Commission PDF or Premium Due PDF agent code is authoritative
                 updates['agent_code'] = agent_code
                 print(f"  👤 Updating agent code: {existing.get('agent_code')} → {agent_code}")
+        
+        # Rule 4b: For Premium Due PDFs, payment_period (Mod column) is final - always update
+        if is_premium_due_pdf and fields_to_update.get('payment_period'):
+            pdf_payment = fields_to_update['payment_period']
+            existing_payment = existing.get('payment_period')
+            if existing_payment != pdf_payment:
+                updates['payment_period'] = pdf_payment
+                print(f"  📋 Updating payment term (Mod is final): {existing_payment} → {pdf_payment}")
+            elif not existing_payment:
+                updates['payment_period'] = pdf_payment
+                print(f"  📋 Adding payment term: {pdf_payment}")
         
         # Rule 5: Update other fields if empty (only for non-commission PDFs)
         if not is_commission_pdf:
             for field in ['plan_name', 'date_of_commencement', 'payment_period', 'sum_assured']:
+                # Skip payment_period if already handled by Premium Due PDF logic
+                if is_premium_due_pdf and field == 'payment_period':
+                    continue
                 if fields_to_update.get(field) and not existing.get(field):
                     updates[field] = fields_to_update[field]
         
@@ -736,14 +772,17 @@ def process_pdf_files():
             # Determine document type and extract details
             policy_details = []
             is_commission_pdf = False
+            is_premium_due_pdf = False
             
-            if 'Commission' in text or 'P/H Name' in text or 'CM-' in pdf_file.name or 'Agent Code' in text:
+            # Check filename and content for document type (Premium Due takes priority)
+            if 'Premdue' in pdf_file.name or 'Premium Due' in text or 'Name of Assured' in text:
+                print("  📋 Document type: Premium Due")
+                is_premium_due_pdf = True
+                policy_details = extract_premium_due_details(text)
+            elif 'Commission' in text or 'P/H Name' in text or 'CM-' in pdf_file.name:
                 print("  📋 Document type: Commission")
                 is_commission_pdf = True
                 policy_details = extract_commission_details(text)
-            elif 'Premium Due' in text or 'Name of Assured' in text or 'Premdue' in pdf_file.name.lower():
-                print("  📋 Document type: Premium Due")
-                policy_details = extract_premium_due_details(text)
             else:
                 print("  ⚠️  Unknown document type")
             
@@ -765,7 +804,8 @@ def process_pdf_files():
                     agent_code,
                     stats,
                     local_conn,
-                    is_commission_pdf
+                    is_commission_pdf,
+                    is_premium_due_pdf
                 )
             
             # Move to processed
