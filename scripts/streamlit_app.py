@@ -306,41 +306,43 @@ def search_customers(query=""):
         return [], 0
 
 def display_customer_card(customer):
-    """Display a customer card"""
-    with st.container():
-        st.markdown("---")
-        
-        # Customer header with edit button
-        header_col, edit_col = st.columns([4, 1])
-        
-        with header_col:
-            # Customer header with color coding and nickname
-            is_generic = customer['customer_name'].startswith('Customer_')
-            nickname = customer.get('nickname', '')
-            has_duplicates = customer.get('potential_duplicates', [])
-            
-            # Display customer name with appropriate styling
-            if has_duplicates:
-                if nickname:
-                    st.warning(f"🔄 {customer['customer_name']} - 🏷️ {nickname} (Potential Duplicates Found)")
-                else:
-                    st.warning(f"🔄 {customer['customer_name']} (Potential Duplicates Found)")
-            elif is_generic:
-                if nickname:
-                    st.error(f"⚠️ {customer['customer_name']} (Generic Name) - 🏷️ {nickname}")
-                else:
-                    st.error(f"⚠️ {customer['customer_name']} (Generic Name)")
-            else:
-                if nickname:
-                    st.success(f"👤 {customer['customer_name']} - 🏷️ {nickname}")
-                else:
-                    st.success(f"👤 {customer['customer_name']}")
-        
-        with edit_col:
+    """Display a customer card with collapsible details"""
+    # Determine customer name styling
+    is_generic = customer['customer_name'].startswith('Customer_')
+    nickname = customer.get('nickname', '')
+    has_duplicates = customer.get('potential_duplicates', [])
+    policy_count = len(customer.get('policies', []))
+    
+    # Create customer name display with emoji and policy count
+    if nickname:
+        display_name = f"👤 {customer['customer_name']} - 🏷️ {nickname} ({policy_count} policies)"
+    else:
+        display_name = f"👤 {customer['customer_name']} ({policy_count} policies)"
+    
+    # Add warning indicators
+    if has_duplicates:
+        display_name = "🔄 " + display_name + " ⚠️ Duplicates"
+    elif is_generic:
+        display_name = "⚠️ " + display_name + " (Generic)"
+    
+    # Main expandable customer section
+    with st.expander(display_name, expanded=False):
+        # Edit button at the top
+        col1, col2, col3 = st.columns([3, 1, 1])
+        with col2:
             edit_key = f"edit_{customer['customer_id']}"
-            if st.button("✏️ Edit", key=edit_key, type="secondary", width="stretch"):
+            if st.button("✏️ Edit Customer", key=edit_key, type="secondary", use_container_width=True):
                 st.session_state.edit_customer_id = customer['customer_id']
                 st.rerun()
+        
+        with col3:
+            add_policy_key = f"add_policy_btn_{customer['customer_id']}"
+            if st.button("➕ Add Policy", key=add_policy_key, type="primary", use_container_width=True):
+                st.session_state.add_policy_customer_id = customer['customer_id']
+                st.session_state.add_policy_customer_name = customer['customer_name']
+                st.rerun()
+        
+        st.markdown("---")
         
         # Show potential duplicates if any
         if customer.get('potential_duplicates'):
@@ -369,18 +371,18 @@ def display_customer_card(customer):
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.markdown(f"🏷️ **Nickname:** {customer.get('nickname') or 'N/A'}")
-            st.markdown(f"📞 **Phone:** {customer.get('phone_number') or 'N/A'}")
-            st.markdown(f"📧 **Email:** {customer.get('email') or 'N/A'}")
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🏷️ <strong>Nickname:</strong> {customer.get('nickname') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>📞 <strong>Phone:</strong> {customer.get('phone_number') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>📧 <strong>Email:</strong> {customer.get('email') or 'N/A'}</p>", unsafe_allow_html=True)
         
         with col2:
-            st.markdown(f"💼 **Occupation:** {customer.get('occupation') or 'N/A'}")
-            st.markdown(f"🆔 **Aadhaar:** {customer.get('aadhaar_number') or 'N/A'}")
-            st.markdown(f"🎂 **DOB:** {customer.get('date_of_birth') or 'N/A'}")
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>💼 <strong>Occupation:</strong> {customer.get('occupation') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🆔 <strong>Aadhaar:</strong> {customer.get('aadhaar_number') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🎂 <strong>DOB:</strong> {customer.get('date_of_birth') or 'N/A'}</p>", unsafe_allow_html=True)
         
         with col3:
-            st.markdown(f"📞 **Alt Phone:** {customer.get('alt_phone_number') or 'N/A'}")
-            st.markdown(f"� **Updated:** {customer.get('last_updated') or 'N/A'}")
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>📞 <strong>Alt Phone:</strong> {customer.get('alt_phone_number') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🔄 <strong>Updated:</strong> {customer.get('last_updated') or 'N/A'}</p>", unsafe_allow_html=True)
             
         st.markdown("</div>", unsafe_allow_html=True)
         
@@ -410,10 +412,12 @@ def display_customer_card(customer):
             st.markdown(f"📝 **Notes:** {customer.get('notes')}")
             st.markdown("</div>", unsafe_allow_html=True)
         
-        # Enhanced Policies section with edit functionality
+        # Enhanced Policies section with nested expandable - each policy is collapsible
         if customer['policies']:
-            with st.expander(f"📋 Policies ({len(customer['policies'])})", expanded=True):
-                for i, policy in enumerate(customer['policies']):
+            st.markdown("---")
+            st.markdown(f"### 📋 Policies ({len(customer['policies'])})")
+            
+            for i, policy in enumerate(customer['policies']):
                     # Policy header with edit button
                     header_col, edit_col = st.columns([4, 1])
                     
