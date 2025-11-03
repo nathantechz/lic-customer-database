@@ -305,8 +305,23 @@ def search_customers(query=""):
         st.error(f"❌ Database query error: {e}")
         return [], 0
 
-def display_customer_card(customer):
+def display_customer_card(customer, card_index=0):
     """Display a customer card with collapsible details"""
+    # Color palette for distinguishing customer cards
+    colors = [
+        '#E8F4FD',  # Light blue
+        '#FFF4E6',  # Light orange
+        '#E8F8F5',  # Light green
+        '#F4E8FD',  # Light purple
+        '#FDE8F4',  # Light pink
+        '#FFFACD',  # Light yellow
+        '#E0F2F1',  # Light teal
+        '#FFF0F5',  # Light lavender
+    ]
+    
+    # Get color for this card (cycle through colors)
+    card_color = colors[card_index % len(colors)]
+    
     # Determine customer name styling
     is_generic = customer['customer_name'].startswith('Customer_')
     nickname = customer.get('nickname', '')
@@ -324,6 +339,19 @@ def display_customer_card(customer):
         display_name = "🔄 " + display_name + " ⚠️ Duplicates"
     elif is_generic:
         display_name = "⚠️ " + display_name + " (Generic)"
+    
+    # Add custom CSS for this specific expander
+    st.markdown(f"""
+        <style>
+        div[data-testid="stExpander"]:nth-of-type({card_index + 1}) {{
+            background: linear-gradient(145deg, {card_color}, #ffffff);
+            border-radius: 12px;
+            padding: 0.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }}
+        </style>
+    """, unsafe_allow_html=True)
     
     # Main expandable customer section
     with st.expander(display_name, expanded=False):
@@ -1739,7 +1767,7 @@ def main():
             
             # Display customers
             for i, customer in enumerate(customers):
-                display_customer_card(customer)
+                display_customer_card(customer, card_index=i)
                 
                 # Add pagination for large results
                 if i > 0 and (i + 1) % 10 == 0 and i + 1 < len(customers):
@@ -1763,7 +1791,7 @@ def main():
             
             # Display customers
             for i, customer in enumerate(customers):
-                display_customer_card(customer)
+                display_customer_card(customer, card_index=i)
                 
                 # Add pagination for large results
                 if i > 0 and (i + 1) % 10 == 0 and i + 1 < len(customers):
