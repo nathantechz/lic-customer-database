@@ -305,6 +305,86 @@ def search_customers(query=""):
         st.error(f"❌ Database query error: {e}")
         return [], 0
 
+def get_all_addresses():
+    """Get all unique addresses from the database"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get all customers with addresses
+        response = supabase.table('customers').select('full_address').execute()
+        
+        addresses = set()
+        for customer in response.data:
+            address = customer.get('full_address')
+            if address and address.strip() and address.lower() != 'n/a':
+                addresses.add(address.strip())
+        
+        return sorted(list(addresses))
+    except Exception as e:
+        st.error(f"❌ Error fetching addresses: {e}")
+        return []
+
+def get_policies_by_address(address):
+    """Get all policies for customers at a specific address, sorted by FUP date"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Get customers with this address
+        customers_response = supabase.table('customers').select(
+            'customer_id, customer_name, phone_number, full_address'
+        ).eq('full_address', address).execute()
+        
+        if not customers_response.data:
+            return []
+        
+        customer_ids = [c['customer_id'] for c in customers_response.data]
+        customer_map = {c['customer_id']: c for c in customers_response.data}
+        
+        # Get all policies for these customers
+        policies_response = supabase.table('policies').select(
+            'policy_number, customer_id, premium_amount, current_fup_date'
+        ).in_('customer_id', customer_ids).execute()
+        
+        # Combine customer and policy data
+        policy_list = []
+        for policy in policies_response.data:
+            customer = customer_map.get(policy['customer_id'])
+            if customer:
+                policy_list.append({
+                    'policy_number': policy['policy_number'],
+                    'customer_name': customer['customer_name'],
+                    'phone_number': customer['phone_number'],
+                    'premium_amount': policy.get('premium_amount'),
+                    'fup_date': policy.get('current_fup_date'),
+                })
+        
+        # Sort by FUP date (most recent first)
+        # Handle None values and parse dates
+        from datetime import datetime
+        
+        def parse_fup_date(policy):
+            fup = policy.get('fup_date')
+            if not fup:
+                return datetime.min
+            try:
+                # Try different date formats
+                for fmt in ['%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%d-%m-%y']:
+                    try:
+                        return datetime.strptime(fup, fmt)
+                    except:
+                        continue
+                return datetime.min
+            except:
+                return datetime.min
+        
+        policy_list.sort(key=parse_fup_date, reverse=True)
+        
+        return policy_list
+        
+    except Exception as e:
+        st.error(f"❌ Error fetching policies by address: {e}")
+        return []
+
 def display_customer_card(customer, card_index=0):
     """Display a customer card with collapsible details"""
     # Color palette for distinguishing customer cards
@@ -1696,11 +1776,25 @@ def main():
         st.markdown("<div style='margin-top: 1.85rem;'></div>", unsafe_allow_html=True)
         search_button = st.button("🔍 Search", type="primary", use_container_width=True)
     
-    # Add Customer button below search bar
+    # Add Customer button and Address filter below search bar
     st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
+    
+    # Get all addresses for dropdown
+    addresses = get_all_addresses()
+    
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col1:
         add_new_customer_btn = st.button("➕ Add New Customer", type="primary", use_container_width=True)
+    
+    with col2:
+        if addresses:
+            selected_address = st.selectbox(
+                "📍 Filter by Location",
+                options=["-- All Locations --"] + addresses,
+                key="address_filter"
+            )
+        else:
+            selected_address = None
     
     st.markdown("---")
     
@@ -1716,7 +1810,39 @@ def main():
             show_manual_entry_forms()
         st.markdown("---")
     
-    # Initialize session state for search and editing
+    # Display policies by selected address in table format
+    if addresses and selected_address and selected_address != "-- All Locations --":
+        with st.spinner("🔍 Loading policies for this location..."):
+            policies = get_policies_by_address(selected_address)
+        
+        if policies:
+            st.success(f"📊 Found **{len(policies)}** policies at **{selected_address}**")
+            
+            # Create DataFrame for table display
+            import pandas as pd
+            
+            table_data = []
+            for policy in policies:
+                table_data.append({
+                    'Policy Number': policy['policy_number'],
+                    'Customer Name': policy['customer_name'],
+                    'Phone Number': policy['phone_number'] or 'N/A',
+                    'Premium Amount': f"₹{policy['premium_amount']:,.0f}" if policy['premium_amount'] else 'N/A',
+                })
+            
+            df = pd.DataFrame(table_data)
+            
+            # Display the table
+            st.dataframe(
+                df,
+                use_container_width=True,
+                hide_index=True,
+                height=400
+            )
+        else:
+            st.info(f"ℹ️ No policies found for address: {selected_address}")
+    
+    st.markdown("---")    # Initialize session state for search and editing
     if 'show_results' not in st.session_state:
         st.session_state.show_results = False
     if 'edit_customer_id' not in st.session_state:
