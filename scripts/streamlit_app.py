@@ -620,6 +620,39 @@ def get_premium_fine_details(due_date, today_date, payment_mode, modal_premium, 
         'dues_breakdown': []
     }
 
+def normalize_payment_mode(payment_mode):
+    """
+    Normalize payment mode from database to match selectbox options
+    
+    Args:
+        payment_mode (str): Payment mode from database
+    
+    Returns:
+        str: Normalized payment mode ('Monthly', 'Quarterly', 'HalfYearly', 'Yearly')
+    """
+    if not payment_mode:
+        return 'Monthly'
+    
+    # Convert to lowercase and remove spaces/hyphens for comparison
+    mode_lower = str(payment_mode).lower().strip().replace(' ', '').replace('-', '')
+    
+    # Map various formats to standard format
+    if mode_lower in ['monthly', 'month', 'm']:
+        return 'Monthly'
+    elif mode_lower in ['quarterly', 'quarter', 'q', '3months']:
+        return 'Quarterly'
+    elif mode_lower in ['halfyearly', 'semiannual', 'h', '6months']:
+        return 'HalfYearly'
+    elif mode_lower in ['yearly', 'annual', 'annually', 'year', 'y', '12months']:
+        return 'Yearly'
+    
+    # If exact match found, return as-is
+    if payment_mode in ['Monthly', 'Quarterly', 'HalfYearly', 'Yearly']:
+        return payment_mode
+    
+    # Default to Monthly if can't match
+    return 'Monthly'
+
 def search_policies_by_number(partial_policy_number):
     """
     Search for policies matching the partial policy number
@@ -638,7 +671,7 @@ def search_policies_by_number(partial_policy_number):
         
         # Search for policies starting with the partial number
         policy_response = supabase.table('policies').select(
-            'policy_number, customer_id, premium_mode, premium_amount, '
+            'policy_number, customer_id, payment_period, premium_amount, '
             'date_of_commencement, current_fup_date'
         ).ilike('policy_number', f'{partial_policy_number}%').limit(20).execute()
         
@@ -663,7 +696,7 @@ def search_policies_by_number(partial_policy_number):
             policy_data = {
                 'policy_number': policy['policy_number'],
                 'customer_name': customer_name,
-                'payment_mode': policy.get('premium_mode'),
+                'payment_mode': normalize_payment_mode(policy.get('payment_period')),
                 'premium_amount': policy.get('premium_amount'),
                 'commencement_date': policy.get('date_of_commencement'),
                 'fup_date': policy.get('current_fup_date')
@@ -692,7 +725,7 @@ def get_policy_details_for_calculator(policy_number):
         
         # Get policy details
         policy_response = supabase.table('policies').select(
-            'policy_number, customer_id, premium_mode, premium_amount, '
+            'policy_number, customer_id, payment_period, premium_amount, '
             'date_of_commencement, current_fup_date'
         ).eq('policy_number', policy_number).execute()
         
@@ -711,7 +744,7 @@ def get_policy_details_for_calculator(policy_number):
         return {
             'policy_number': policy['policy_number'],
             'customer_name': customer_name,
-            'payment_mode': policy.get('premium_mode'),
+            'payment_mode': normalize_payment_mode(policy.get('payment_period')),
             'premium_amount': policy.get('premium_amount'),
             'commencement_date': policy.get('date_of_commencement'),
             'fup_date': policy.get('current_fup_date')
@@ -2615,6 +2648,27 @@ def main():
                         import pandas as pd
                         
                         st.markdown("#### 📋 Detailed Breakdown by Due Date")
+                        
+                        # Custom CSS for scrollable table with no text wrapping
+                        st.markdown("""
+                        <style>
+                        .scrollable-table {
+                            overflow-x: auto;
+                            -webkit-overflow-scrolling: touch;
+                        }
+                        .scrollable-table table {
+                            width: 100%;
+                            white-space: nowrap;
+                            font-size: 14px;
+                        }
+                        .scrollable-table th, .scrollable-table td {
+                            padding: 8px 12px;
+                            text-align: left;
+                            white-space: nowrap;
+                        }
+                        </style>
+                        """, unsafe_allow_html=True)
+                        
                         breakdown_data = []
                         for idx, due in enumerate(result['dues_breakdown'], 1):
                             breakdown_data.append({
@@ -2628,7 +2682,11 @@ def main():
                             })
                         
                         breakdown_df = pd.DataFrame(breakdown_data)
+                        
+                        # Display table in a scrollable container
+                        st.markdown('<div class="scrollable-table">', unsafe_allow_html=True)
                         st.table(breakdown_df)
+                        st.markdown('</div>', unsafe_allow_html=True)
                         
                         # Show total summary
                         st.markdown("#### 💳 Revival Payment Summary")
