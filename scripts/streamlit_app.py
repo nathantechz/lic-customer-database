@@ -2112,7 +2112,7 @@ def main():
     
     # Sidebar with project info
     with st.sidebar:
-        st.markdown("###📁 Project Info")
+        st.markdown("### 📁 Project Info")
         
         db_exists, db_info = check_database_exists()
         st.write(f"**Database:** {'✅ Connected' if db_exists else '❌ Disconnected'}")
@@ -2120,6 +2120,130 @@ def main():
         if db_exists:
             st.success("✅ Supabase Connected!")
             st.info(f"Using: {db_info}")
+            
+            # Agent Statistics
+            st.markdown("---")
+            st.markdown("### 📊 Agent Statistics")
+            
+            try:
+                supabase = get_supabase_client()
+                
+                # Get all policies with agent codes
+                policies_response = supabase.table('policies').select('agent_code, customer_id').execute()
+                policies_data = policies_response.data
+                
+                if policies_data:
+                    # Count customers per agent code
+                    agent_stats = {}
+                    for policy in policies_data:
+                        agent_code = policy.get('agent_code', 'Unknown')
+                        if not agent_code or agent_code.strip() == '':
+                            agent_code = 'No Agent Code'
+                        
+                        if agent_code not in agent_stats:
+                            agent_stats[agent_code] = set()
+                        agent_stats[agent_code].add(policy['customer_id'])
+                    
+                    # Convert to sorted list with counts
+                    agent_list = []
+                    for agent_code, customer_ids in agent_stats.items():
+                        agent_list.append({
+                            'agent_code': agent_code,
+                            'customer_count': len(customer_ids)
+                        })
+                    
+                    # Sort by customer count descending
+                    agent_list.sort(key=lambda x: x['customer_count'], reverse=True)
+                    
+                    # Display stats
+                    total_agents = len(agent_list)
+                    total_customers = len(set(policy['customer_id'] for policy in policies_data))
+                    
+                    st.metric("Total Agents", total_agents)
+                    st.metric("Total Customers", total_customers)
+                    
+                    with st.expander(f"📋 View Customer Count by Agent ({total_agents} agents)"):
+                        for agent in agent_list:
+                            st.text(f"🔹 {agent['agent_code']}: {agent['customer_count']} customer(s)")
+                else:
+                    st.info("No policies found")
+                    
+            except Exception as e:
+                st.error(f"Error loading agent stats: {e}")
+            
+            # Cleanup utility
+            st.markdown("---")
+            st.markdown("### 🧹 Admin Tools")
+            
+            # Initialize session state for cleanup
+            if 'customers_to_delete' not in st.session_state:
+                st.session_state.customers_to_delete = None
+            
+            if st.button("🗑️ Clean Empty Customers", help="Delete customers without any policies"):
+                with st.spinner("Checking for customers without policies..."):
+                    try:
+                        supabase = get_supabase_client()
+                        
+                        # Get all customers
+                        customers_response = supabase.table('customers').select('customer_id, customer_name').execute()
+                        all_customers = customers_response.data
+                        
+                        # Get all customer IDs that have policies
+                        policies_response = supabase.table('policies').select('customer_id').execute()
+                        customer_ids_with_policies = set(policy['customer_id'] for policy in policies_response.data)
+                        
+                        # Find customers without policies
+                        customers_without_policies = [
+                            customer for customer in all_customers 
+                            if customer['customer_id'] not in customer_ids_with_policies
+                        ]
+                        
+                        if not customers_without_policies:
+                            st.success("✅ No empty customers found. Database is clean!")
+                            st.session_state.customers_to_delete = None
+                        else:
+                            st.session_state.customers_to_delete = customers_without_policies
+                    
+                    except Exception as e:
+                        st.error(f"❌ Error: {e}")
+                        st.session_state.customers_to_delete = None
+            
+            # Show confirmation UI if there are customers to delete
+            if st.session_state.customers_to_delete:
+                customers_to_delete = st.session_state.customers_to_delete
+                st.warning(f"⚠️ Found {len(customers_to_delete)} customers without policies")
+                
+                with st.expander(f"View {len(customers_to_delete)} customers to delete"):
+                    for customer in customers_to_delete:
+                        st.text(f"• {customer['customer_name']} (ID: {customer['customer_id']})")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button(f"✅ Confirm Delete {len(customers_to_delete)} Customers", type="primary", use_container_width=True):
+                        supabase = get_supabase_client()
+                        deleted_count = 0
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        
+                        for idx, customer in enumerate(customers_to_delete):
+                            try:
+                                supabase.table('customers').delete().eq('customer_id', customer['customer_id']).execute()
+                                deleted_count += 1
+                                status_text.text(f"Deleting: {customer['customer_name']}")
+                                progress_bar.progress((idx + 1) / len(customers_to_delete))
+                            except Exception as e:
+                                st.error(f"Failed to delete {customer['customer_name']}: {e}")
+                        
+                        progress_bar.empty()
+                        status_text.empty()
+                        st.success(f"✅ Successfully deleted {deleted_count} customers!")
+                        st.session_state.customers_to_delete = None
+                        st.rerun()
+                
+                with col2:
+                    if st.button("❌ Cancel", use_container_width=True):
+                        st.session_state.customers_to_delete = None
+                        st.rerun()
         else:
             st.error("❌ Connection Failed")
             st.code(str(db_info))
