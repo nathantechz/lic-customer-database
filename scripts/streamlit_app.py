@@ -3,6 +3,7 @@ import pandas as pd
 from pathlib import Path
 import re
 from datetime import datetime, date
+from dateutil.relativedelta import relativedelta
 import os
 from supabase import create_client, Client
 
@@ -384,6 +385,118 @@ def get_policies_by_address(address):
     except Exception as e:
         st.error(f"❌ Error fetching policies by address: {e}")
         return []
+
+def get_premium_fine_details(due_date, today_date, payment_mode, modal_premium, commencement_date=None, last_premium_paid_date=None):
+    """
+    Calculate the fine and policy status based on missed premium due date.
+    
+    Args:
+        due_date (datetime.date): The specific due date of the missed premium (FUP date)
+        today_date (datetime.date): The current date for calculation
+        payment_mode (str): The policy's payment frequency ('Monthly', 'Quarterly', 'HalfYearly', 'Yearly')
+        modal_premium (float): The premium amount for the specified mode
+        commencement_date (datetime.date, optional): Policy commencement date for calculating future due dates
+        last_premium_paid_date (datetime.date, optional): Last premium payment date to calculate pending payments
+    
+    Returns:
+        dict: {'fine': float, 'policy_status': str, 'months_pending': int, 'next_due_dates': list, 'calculation_base_date': date}
+    """
+    
+    # Step 1: Determine the calculation base date
+    # Use whichever is latest: FUP date (due_date) or last premium paid date
+    if last_premium_paid_date and last_premium_paid_date > due_date:
+        calculation_base_date = last_premium_paid_date
+    else:
+        calculation_base_date = due_date
+    
+    # Step 2: Calculate days_late from the calculation base date
+    days_late = (today_date - calculation_base_date).days
+    
+    # Step 3: Determine grace_period based on payment_mode
+    if payment_mode == 'Monthly':
+        grace_period = 15  # Monthly policies have 15 days grace period
+    else:
+        grace_period = 29  # Quarterly, HalfYearly, Yearly have 29 days grace period
+    
+    # Step 4: Calculate pending months/payments if last_premium_paid_date is provided
+    months_pending = 0
+    
+    if last_premium_paid_date:
+        # Calculate how many payment periods have passed since last payment
+        time_diff = relativedelta(today_date, last_premium_paid_date)
+        
+        if payment_mode == 'Monthly':
+            months_pending = time_diff.months + (time_diff.years * 12)
+        elif payment_mode == 'Quarterly':
+            months_pending = (time_diff.months + (time_diff.years * 12)) // 3
+        elif payment_mode == 'HalfYearly':
+            months_pending = (time_diff.months + (time_diff.years * 12)) // 6
+        elif payment_mode == 'Yearly':
+            months_pending = time_diff.years
+    
+    # Step 5: Calculate next due dates if commencement_date is provided
+    next_due_dates = []
+    if commencement_date:
+        # Get the day of month from commencement date
+        due_day = commencement_date.day
+        
+        # Calculate next few due dates based on payment mode
+        current_date = today_date
+        for i in range(3):  # Show next 3 due dates
+            if payment_mode == 'Monthly':
+                next_due = current_date + relativedelta(months=i+1, day=due_day)
+            elif payment_mode == 'Quarterly':
+                next_due = current_date + relativedelta(months=(i+1)*3, day=due_day)
+            elif payment_mode == 'HalfYearly':
+                next_due = current_date + relativedelta(months=(i+1)*6, day=due_day)
+            else:  # Yearly
+                next_due = current_date + relativedelta(years=i+1, day=due_day)
+            next_due_dates.append(next_due)
+    
+    # Step 6: Check Policy Status and Calculate Fine
+    
+    # Case 1: In Grace Period
+    # If the number of days late is within the grace period, no fine is charged
+    if days_late <= grace_period:
+        return {
+            'fine': 0.0,
+            'policy_status': 'In Grace',
+            'months_pending': months_pending,
+            'next_due_dates': next_due_dates,
+            'calculation_base_date': calculation_base_date
+        }
+    
+    # Case 2: Lapsed ("Pakka Lapse")
+    # Check if today_date is at least 5 months and 29 days past the calculation_base_date
+    # Using relativedelta to accurately calculate the time difference
+    lapse_threshold = calculation_base_date + relativedelta(months=5, days=29)
+    
+    # Calculate the number of full, completed months past the calculation_base_date
+    # This is used for both Late and Pakka Lapse status
+    time_diff = relativedelta(today_date, calculation_base_date)
+    months_late = time_diff.months + (time_diff.years * 12)
+    
+    # Calculate fine: 5% (0.05) of modal_premium per month late
+    fine = modal_premium * 0.05 * months_late
+    
+    if today_date >= lapse_threshold:
+        # Policy has fully lapsed, but fine is still applicable
+        return {
+            'fine': fine,
+            'policy_status': 'Pakka Lapse',
+            'months_pending': months_pending,
+            'next_due_dates': next_due_dates,
+            'calculation_base_date': calculation_base_date
+        }
+    
+    # Case 3: Late (Fine Applicable)
+    return {
+        'fine': fine,
+        'policy_status': 'Late',
+        'months_pending': months_pending,
+        'next_due_dates': next_due_dates,
+        'calculation_base_date': calculation_base_date
+    }
 
 def display_customer_card(customer, card_index=0):
     """Display a customer card with collapsible details"""
@@ -1762,173 +1875,446 @@ def main():
         show_setup_instructions()
         st.stop()
     
-    # Search section with search button
-    col1, col2 = st.columns([4, 1])
+    # Create tabs
+    tab1, tab2, tab3 = st.tabs(["🔍 Search Customers", "📍 Filter by Location", "🧮 Premium Calculator"])
     
-    with col1:
-        search_query = st.text_input(
-            "🔍 Search by name, phone, address, Aadhaar, policy number, agent code, or premium amount",
-            placeholder="Type customer name, phone, address, policy number, premium amount...",
-            label_visibility="visible"
-        )
-    
-    with col2:
-        st.markdown("<div style='margin-top: 1.85rem;'></div>", unsafe_allow_html=True)
-        search_button = st.button("🔍 Search", type="primary", use_container_width=True)
-    
-    # Add Customer button and Address filter below search bar
-    st.markdown("---")
-    
-    # Get all addresses for dropdown
-    addresses = get_all_addresses()
-    
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col1:
+    # TAB 1: Search Customers
+    with tab1:
+        # Search section with search button
+        col1, col2 = st.columns([4, 1])
+        
+        with col1:
+            search_query = st.text_input(
+                "🔍 Search by name, phone, address, Aadhaar, policy number, agent code, or premium amount",
+                placeholder="Type customer name, phone, address, policy number, premium amount...",
+                label_visibility="visible"
+            )
+        
+        with col2:
+            st.markdown("<div style='margin-top: 1.85rem;'></div>", unsafe_allow_html=True)
+            search_button = st.button("🔍 Search", type="primary", use_container_width=True)
+        
+        # Add Customer button below search bar
+        st.markdown("---")
         add_new_customer_btn = st.button("➕ Add New Customer", type="primary", use_container_width=True)
+        st.markdown("---")
+        
+        # Show Add Customer form if button clicked
+        if 'show_add_customer_form' not in st.session_state:
+            st.session_state.show_add_customer_form = False
+        
+        if add_new_customer_btn:
+            st.session_state.show_add_customer_form = not st.session_state.show_add_customer_form
+        
+        if st.session_state.show_add_customer_form:
+            with st.expander("➕ Add New Customer & Policy", expanded=True):
+                show_manual_entry_forms()
+            st.markdown("---")
+        
+        # Initialize session state for search and editing
+        if 'show_results' not in st.session_state:
+            st.session_state.show_results = False
+        if 'edit_customer_id' not in st.session_state:
+            st.session_state.edit_customer_id = None
+        if 'add_policy_customer_id' not in st.session_state:
+            st.session_state.add_policy_customer_id = None
+        if 'add_policy_customer_name' not in st.session_state:
+            st.session_state.add_policy_customer_name = None
+        if 'search_query' not in st.session_state:
+            st.session_state.search_query = ""
+        
+        # Check if we're in edit mode
+        if st.session_state.edit_customer_id:
+            st.markdown("---")
+            customer_data = get_customer_by_id(st.session_state.edit_customer_id)
+            if customer_data:
+                show_customer_edit_form(customer_data)
+            else:
+                st.error("Customer not found!")
+                st.session_state.edit_customer_id = None
+            st.stop()
+        
+        # Check if we're in add policy mode
+        if st.session_state.add_policy_customer_id:
+            st.markdown("---")
+            st.header(f"➕ Add New Policy for {st.session_state.add_policy_customer_name}")
+            
+            customer_data = get_customer_by_id(st.session_state.add_policy_customer_id)
+            if customer_data:
+                # Show policy addition form
+                show_add_policy_form(st.session_state.add_policy_customer_id, st.session_state.add_policy_customer_name)
+            else:
+                st.error("Customer not found!")
+                st.session_state.add_policy_customer_id = None
+                st.session_state.add_policy_customer_name = None
+            st.stop()
+        
+        # Perform search - on search button
+        if search_button:
+            query = search_query
+            st.session_state.show_results = True
+            st.session_state.search_query = query
+            
+            with st.spinner("🔍 Searching database..."):
+                customers, total_policies = search_customers(query)
+            
+            if customers:
+                st.success(f"📊 Found **{len(customers)}** customers with **{total_policies}** policies")
+                
+                # Display customers
+                for i, customer in enumerate(customers):
+                    display_customer_card(customer, card_index=i)
+                    
+                    # Add pagination for large results
+                    if i > 0 and (i + 1) % 10 == 0 and i + 1 < len(customers):
+                        if not st.button(f"Show more... ({len(customers) - i - 1} remaining)", key=f"more_{i}"):
+                            break
+            else:
+                if query:
+                    st.warning(f"🔍 No customers found matching: **{query}**")
+                else:
+                    st.info("📋 No customers in database yet. Process some PDFs first!")
+        
+        # Also show results if we have them in session state
+        elif st.session_state.get('show_results', False) and 'search_query' in st.session_state:
+            query = st.session_state.search_query
+            
+            with st.spinner("🔍 Loading results..."):
+                customers, total_policies = search_customers(query)
+            
+            if customers:
+                st.success(f"📊 Found **{len(customers)}** customers with **{total_policies}** policies")
+                
+                # Display customers
+                for i, customer in enumerate(customers):
+                    display_customer_card(customer, card_index=i)
+                    
+                    # Add pagination for large results
+                    if i > 0 and (i + 1) % 10 == 0 and i + 1 < len(customers):
+                        if not st.button(f"Show more... ({len(customers) - i - 1} remaining)", key=f"more_{i}"):
+                            break
+            else:
+                if query:
+                    st.warning(f"🔍 No customers found matching: **{query}**")
+                else:
+                    st.info("📋 No customers in database yet. Process some PDFs first!")
     
-    with col2:
+    # TAB 2: Filter by Location
+    with tab2:
+        st.markdown("### 📍 View Policies by Location")
+        st.markdown("Select an address to view all policies for customers at that location")
+        st.markdown("---")
+        
+        # Get all addresses for dropdown
+        addresses = get_all_addresses()
+        
         if addresses:
             selected_address = st.selectbox(
-                "📍 Filter by Location",
-                options=["-- All Locations --"] + addresses,
-                key="address_filter"
+                "Select Location",
+                options=["-- Select an Address --"] + addresses,
+                key="address_filter_tab"
             )
+            
+            # Display policies by selected address in table format
+            if selected_address and selected_address != "-- Select an Address --":
+                with st.spinner("🔍 Loading policies for this location..."):
+                    policies = get_policies_by_address(selected_address)
+                
+                if policies:
+                    st.success(f"📊 Found **{len(policies)}** policies at **{selected_address}**")
+                    
+                    # Create DataFrame for table display
+                    import pandas as pd
+                    
+                    table_data = []
+                    for policy in policies:
+                        table_data.append({
+                            'Policy Number': policy['policy_number'],
+                            'Customer Name': policy['customer_name'],
+                            'Phone Number': policy['phone_number'] or 'N/A',
+                            'Premium Amount': f"₹{policy['premium_amount']:,.0f}" if policy['premium_amount'] else 'N/A',
+                        })
+                    
+                    df = pd.DataFrame(table_data)
+                    
+                    # Display the table
+                    st.dataframe(
+                        df,
+                        use_container_width=True,
+                        hide_index=True,
+                        height=400
+                    )
+                else:
+                    st.info(f"ℹ️ No policies found for address: {selected_address}")
         else:
-            selected_address = None
+            st.warning("⚠️ No addresses found in the database")
     
-    st.markdown("---")
-    
-    # Show Add Customer form if button clicked
-    if 'show_add_customer_form' not in st.session_state:
-        st.session_state.show_add_customer_form = False
-    
-    if add_new_customer_btn:
-        st.session_state.show_add_customer_form = not st.session_state.show_add_customer_form
-    
-    if st.session_state.show_add_customer_form:
-        with st.expander("➕ Add New Customer & Policy", expanded=True):
-            show_manual_entry_forms()
+    # TAB 3: Premium Calculator
+    with tab3:
+        st.markdown("### 🧮 Premium Fine Calculator")
+        st.markdown("Calculate fine and policy status for missed premium payments")
         st.markdown("---")
-    
-    # Display policies by selected address in table format
-    if addresses and selected_address and selected_address != "-- All Locations --":
-        with st.spinner("🔍 Loading policies for this location..."):
-            policies = get_policies_by_address(selected_address)
         
-        if policies:
-            st.success(f"📊 Found **{len(policies)}** policies at **{selected_address}**")
+        # Create two columns for input
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### � Date Information")
             
-            # Create DataFrame for table display
-            import pandas as pd
-            
-            table_data = []
-            for policy in policies:
-                table_data.append({
-                    'Policy Number': policy['policy_number'],
-                    'Customer Name': policy['customer_name'],
-                    'Phone Number': policy['phone_number'] or 'N/A',
-                    'Premium Amount': f"₹{policy['premium_amount']:,.0f}" if policy['premium_amount'] else 'N/A',
-                })
-            
-            df = pd.DataFrame(table_data)
-            
-            # Display the table
-            st.dataframe(
-                df,
-                use_container_width=True,
-                hide_index=True,
-                height=400
+            # Due Date input
+            due_date_input = st.date_input(
+                "Premium Due Date *",
+                value=date.today() - relativedelta(months=2),  # Default to 2 months ago
+                help="Select the original due date of the premium"
             )
-        else:
-            st.info(f"ℹ️ No policies found for address: {selected_address}")
-    
-    st.markdown("---")    # Initialize session state for search and editing
-    if 'show_results' not in st.session_state:
-        st.session_state.show_results = False
-    if 'edit_customer_id' not in st.session_state:
-        st.session_state.edit_customer_id = None
-    if 'add_policy_customer_id' not in st.session_state:
-        st.session_state.add_policy_customer_id = None
-    if 'add_policy_customer_name' not in st.session_state:
-        st.session_state.add_policy_customer_name = None
-    if 'search_query' not in st.session_state:
-        st.session_state.search_query = ""
-    
-    # Check if we're in edit mode
-    if st.session_state.edit_customer_id:
-        st.markdown("---")
-        customer_data = get_customer_by_id(st.session_state.edit_customer_id)
-        if customer_data:
-            show_customer_edit_form(customer_data)
-        else:
-            st.error("Customer not found!")
-            st.session_state.edit_customer_id = None
-        st.stop()
-    
-    # Check if we're in add policy mode
-    if st.session_state.add_policy_customer_id:
-        st.markdown("---")
-        st.header(f"➕ Add New Policy for {st.session_state.add_policy_customer_name}")
-        
-        customer_data = get_customer_by_id(st.session_state.add_policy_customer_id)
-        if customer_data:
-            # Show policy addition form
-            show_add_policy_form(st.session_state.add_policy_customer_id, st.session_state.add_policy_customer_name)
-        else:
-            st.error("Customer not found!")
-            st.session_state.add_policy_customer_id = None
-            st.session_state.add_policy_customer_name = None
-        st.stop()
-    
-    # Perform search - on search button
-    if search_button:
-        query = search_query
-        st.session_state.show_results = True
-        st.session_state.search_query = query
-        
-        with st.spinner("🔍 Searching database..."):
-            customers, total_policies = search_customers(query)
-        
-        if customers:
-            st.success(f"📊 Found **{len(customers)}** customers with **{total_policies}** policies")
             
-            # Display customers
-            for i, customer in enumerate(customers):
-                display_customer_card(customer, card_index=i)
-                
-                # Add pagination for large results
-                if i > 0 and (i + 1) % 10 == 0 and i + 1 < len(customers):
-                    if not st.button(f"Show more... ({len(customers) - i - 1} remaining)", key=f"more_{i}"):
-                        break
-        else:
-            if query:
-                st.warning(f"🔍 No customers found matching: **{query}**")
-            else:
-                st.info("📋 No customers in database yet. Process some PDFs first!")
-    
-    # Also show results if we have them in session state
-    elif st.session_state.get('show_results', False) and 'search_query' in st.session_state:
-        query = st.session_state.search_query
-        
-        with st.spinner("🔍 Loading results..."):
-            customers, total_policies = search_customers(query)
-        
-        if customers:
-            st.success(f"📊 Found **{len(customers)}** customers with **{total_policies}** policies")
+            # Today's Date input
+            today_date_input = st.date_input(
+                "Today's Date *",
+                value=date.today(),
+                help="Select the current date for calculation"
+            )
             
-            # Display customers
-            for i, customer in enumerate(customers):
-                display_customer_card(customer, card_index=i)
-                
-                # Add pagination for large results
-                if i > 0 and (i + 1) % 10 == 0 and i + 1 < len(customers):
-                    if not st.button(f"Show more... ({len(customers) - i - 1} remaining)", key=f"more_{i}"):
-                        break
-        else:
-            if query:
-                st.warning(f"🔍 No customers found matching: **{query}**")
+            # Optional: Commencement Date
+            st.markdown("---")
+            st.markdown("**Optional Fields**")
+            
+            use_commencement = st.checkbox(
+                "Include Commencement Date",
+                help="Use this to calculate future due dates based on policy start"
+            )
+            
+            commencement_date_input = None
+            if use_commencement:
+                commencement_date_input = st.date_input(
+                    "Policy Commencement Date",
+                    value=date.today() - relativedelta(years=2),
+                    help="The day from this date will be used for calculating future due dates"
+                )
+        
+        with col2:
+            st.markdown("#### 💰 Premium Information")
+            
+            # Payment Mode selection
+            payment_mode = st.selectbox(
+                "Payment Mode *",
+                options=['Monthly', 'Quarterly', 'HalfYearly', 'Yearly'],
+                help="Select the payment frequency of the policy"
+            )
+            
+            # Modal Premium input
+            modal_premium = st.number_input(
+                "Modal Premium Amount (₹) *",
+                min_value=0.0,
+                value=5000.0,
+                step=100.0,
+                help="Enter the premium amount for the selected payment mode"
+            )
+            
+            # Optional: Last Premium Paid Date
+            st.markdown("---")
+            st.markdown("**Optional Fields**")
+            
+            use_last_paid = st.checkbox(
+                "Include Last Premium Paid Date",
+                help="Use this to calculate pending payments/months"
+            )
+            
+            last_premium_paid_input = None
+            if use_last_paid:
+                last_premium_paid_input = st.date_input(
+                    "Last Premium Paid Date",
+                    value=date.today() - relativedelta(months=6),
+                    help="Date when the last premium was paid"
+                )
+        
+        st.markdown("---")
+        
+        # Calculate button
+        if st.button("🧮 Calculate Fine & Status", type="primary", use_container_width=True):
+            # Validate that today's date is not before due date
+            if today_date_input < due_date_input:
+                st.error("❌ Today's date cannot be before the due date!")
             else:
-                st.info("📋 No customers in database yet. Process some PDFs first!")
+                # Calculate using the function
+                result = get_premium_fine_details(
+                    due_date=due_date_input,
+                    today_date=today_date_input,
+                    payment_mode=payment_mode,
+                    modal_premium=modal_premium,
+                    commencement_date=commencement_date_input,
+                    last_premium_paid_date=last_premium_paid_input
+                )
+                
+                # Display results with proper styling
+                st.markdown("---")
+                
+                # Add custom CSS for better visibility
+                st.markdown("""
+                    <style>
+                    div[data-testid="stMetricValue"] {
+                        color: #1f1f1f !important;
+                        font-weight: 600 !important;
+                    }
+                    div[data-testid="stMetricLabel"] {
+                        color: #4f4f4f !important;
+                    }
+                    </style>
+                """, unsafe_allow_html=True)
+                
+                st.markdown("### 📊 Calculation Results")
+                
+                # Show which date was used for calculation
+                calculation_base = result['calculation_base_date']
+                if last_premium_paid_input and last_premium_paid_input > due_date_input:
+                    st.info(f"📌 **Calculation based on:** Last Premium Paid Date ({calculation_base.strftime('%d-%m-%Y')}) - as it's more recent than FUP Date")
+                else:
+                    st.info(f"📌 **Calculation based on:** FUP Date ({calculation_base.strftime('%d-%m-%Y')})")
+                
+                # Calculate additional details for display
+                days_from_base = (today_date_input - calculation_base).days
+                grace_period = 15 if payment_mode == 'Monthly' else 29
+                
+                # Calculate days since lapse threshold (5 months 29 days) for all statuses
+                lapse_threshold_date = calculation_base + relativedelta(months=5, days=29)
+                days_since_lapse_threshold = (today_date_input - lapse_threshold_date).days
+                
+                # Create unified result display columns showing both day metrics
+                res_col1, res_col2, res_col3, res_col4, res_col5 = st.columns(5)
+                
+                with res_col1:
+                    st.metric(
+                        label="Policy Status",
+                        value=result['policy_status']
+                    )
+                
+                with res_col2:
+                    st.metric(
+                        label="Days from Base Date",
+                        value=f"{days_from_base} days",
+                        help=f"Total days since {calculation_base.strftime('%d-%m-%Y')}"
+                    )
+                
+                with res_col3:
+                    if days_since_lapse_threshold >= 0:
+                        st.metric(
+                            label="Days Since Lapse Threshold",
+                            value=f"{days_since_lapse_threshold} days",
+                            help="Days since crossing 5 months 29 days (Pakka Lapse threshold)"
+                        )
+                    else:
+                        st.metric(
+                            label="Days to Lapse Threshold",
+                            value=f"{abs(days_since_lapse_threshold)} days",
+                            help="Days remaining before 5 months 29 days (Pakka Lapse threshold)"
+                        )
+                
+                with res_col4:
+                    st.metric(
+                        label="Fine Amount",
+                        value=f"₹{result['fine']:,.2f}"
+                    )
+                
+                with res_col5:
+                    if result['months_pending'] > 0:
+                        st.metric(
+                            label="Pending Payments",
+                            value=f"{result['months_pending']}"
+                        )
+                
+                # Show next due dates if commencement date was provided
+                if result['next_due_dates']:
+                    st.markdown("---")
+                    st.markdown("#### 📅 Upcoming Due Dates")
+                    due_dates_col1, due_dates_col2, due_dates_col3 = st.columns(3)
+                    
+                    for idx, next_due in enumerate(result['next_due_dates']):
+                        with [due_dates_col1, due_dates_col2, due_dates_col3][idx]:
+                            st.info(f"**Next {idx+1}:** {next_due.strftime('%d-%m-%Y')}")
+                
+                # Status-based messaging
+                st.markdown("---")
+                
+                if result['policy_status'] == 'In Grace':
+                    st.success(f"""
+                    ✅ **Policy is in Grace Period**
+                    
+                    - Grace period for {payment_mode} mode: **{grace_period} days**
+                    - Days from base date: **{days_from_base} days**
+                    - No fine applicable
+                    - Premium can still be paid without penalty
+                    """)
+                    
+                    if result['months_pending'] > 0:
+                        st.info(f"📌 **Note:** {result['months_pending']} payment(s) pending since last premium paid date")
+                
+                elif result['policy_status'] == 'Pakka Lapse':
+                    lapse_date = calculation_base + relativedelta(months=5, days=29)
+                    time_diff = relativedelta(today_date_input, calculation_base)
+                    months_late = time_diff.months + (time_diff.years * 12)
+                    
+                    # Calculate days from the base calculation date (FUP or last premium paid)
+                    days_from_base = (today_date_input - calculation_base).days
+                    # Calculate days since the lapse threshold (5 months 29 days)
+                    days_since_lapse = (today_date_input - lapse_date).days
+                    
+                    st.error(f"""
+                    ❌ **Policy has Lapsed (Pakka Lapse)**
+                    
+                    - Policy lapsed on: **{lapse_date.strftime('%d-%m-%Y')}** (5 months 29 days from base date)
+                    - Days since lapse threshold: **{days_since_lapse} days**
+                    - Days from base date ({calculation_base.strftime('%d-%m-%Y')}): **{days_from_base} days**
+                    - Months late: **{months_late} months**
+                    - Fine calculation: ₹{modal_premium:,.2f} × 0.05 × {months_late} = **₹{result['fine']:,.2f}**
+                    - Total amount for revival: **₹{(modal_premium + result['fine']):,.2f}**
+                    """)
+                    
+                    if result['months_pending'] > 0:
+                        st.info(f"📌 **Pending payments:** {result['months_pending']} payment(s) missed")
+                    
+                    # Additional breakdown for Pakka Lapse
+                    import pandas as pd
+                    
+                    st.markdown("#### 💳 Revival Payment Breakdown")
+                    breakdown_df = pd.DataFrame({
+                        'Component': ['Modal Premium', 'Fine (5% per month)', 'Total for Revival'],
+                        'Amount': [
+                            f"₹{modal_premium:,.2f}",
+                            f"₹{result['fine']:,.2f}",
+                            f"₹{(modal_premium + result['fine']):,.2f}"
+                        ]
+                    })
+                    st.table(breakdown_df)
+                
+                else:  # Late
+                    time_diff = relativedelta(today_date_input, calculation_base)
+                    months_late = time_diff.months + (time_diff.years * 12)
+                    
+                    st.warning(f"""
+                    ⚠️ **Policy is Late - Fine Applicable**
+                    
+                    - Grace period expired: **{days_late - grace_period} days ago**
+                    - Months late: **{months_late} months**
+                    - Fine calculation: ₹{modal_premium:,.2f} × 0.05 × {months_late} = **₹{result['fine']:,.2f}**
+                    - Total amount due: **₹{(modal_premium + result['fine']):,.2f}**
+                    """)
+                    
+                    if result['months_pending'] > 0:
+                        st.info(f"📌 **Total pending payments:** {result['months_pending']} payment(s) missed since last premium paid")
+                    
+                    # Additional breakdown
+                    import pandas as pd
+                    
+                    st.markdown("#### 💳 Payment Breakdown")
+                    breakdown_df = pd.DataFrame({
+                        'Component': ['Modal Premium', 'Fine (5% per month)', 'Total Payable'],
+                        'Amount': [
+                            f"₹{modal_premium:,.2f}",
+                            f"₹{result['fine']:,.2f}",
+                            f"₹{(modal_premium + result['fine']):,.2f}"
+                        ]
+                    })
+                    st.table(breakdown_df)
 
 if __name__ == "__main__":
     main()
