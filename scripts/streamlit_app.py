@@ -386,9 +386,37 @@ def get_policies_by_address(address):
         st.error(f"❌ Error fetching policies by address: {e}")
         return []
 
+def is_sunday_or_holiday(check_date):
+    """
+    Check if a date is Sunday or an Indian national holiday
+    
+    Args:
+        check_date (datetime.date): Date to check
+    
+    Returns:
+        bool: True if Sunday or holiday
+    """
+    # Check if Sunday (weekday() returns 6 for Sunday)
+    if check_date.weekday() == 6:
+        return True
+    
+    # Indian National Holidays (2025-2026)
+    # Format: (month, day)
+    indian_holidays = [
+        (1, 26),   # Republic Day
+        (8, 15),   # Independence Day
+        (10, 2),   # Gandhi Jayanti
+        # Add other major holidays as needed
+    ]
+    
+    return (check_date.month, check_date.day) in indian_holidays
+
 def get_premium_fine_details(due_date, today_date, payment_mode, modal_premium, commencement_date=None, last_premium_paid_date=None):
     """
     Calculate the fine and policy status based on missed premium due date.
+    
+    For Monthly: 5% per month fine, 15 days grace period
+    For Others: 0.9% per month fine (90 paise per 100 rupees), calculate each missed due separately
     
     Args:
         due_date (datetime.date): The specific due date of the missed premium (FUP date)
@@ -399,7 +427,8 @@ def get_premium_fine_details(due_date, today_date, payment_mode, modal_premium, 
         last_premium_paid_date (datetime.date, optional): Last premium payment date to calculate pending payments
     
     Returns:
-        dict: {'fine': float, 'policy_status': str, 'months_pending': int, 'next_due_dates': list, 'calculation_base_date': date}
+        dict: {'fine': float, 'policy_status': str, 'months_pending': int, 'next_due_dates': list, 
+               'calculation_base_date': date, 'dues_breakdown': list}
     """
     
     # Step 1: Determine the calculation base date
@@ -412,13 +441,58 @@ def get_premium_fine_details(due_date, today_date, payment_mode, modal_premium, 
     # Step 2: Calculate days_late from the calculation base date
     days_late = (today_date - calculation_base_date).days
     
-    # Step 3: Determine grace_period based on payment_mode
+    # Step 3: Determine grace_period and fine calculation based on payment_mode
     if payment_mode == 'Monthly':
         grace_period = 15  # Monthly policies have 15 days grace period
+        fine_rate = 0.05  # 5% per month for monthly
     else:
+        # For non-monthly: grace period is 29 days
         grace_period = 29  # Quarterly, HalfYearly, Yearly have 29 days grace period
+        fine_rate = 0.009  # 0.9% per month (90 paise per 100 rupees)
     
-    # Step 4: Calculate pending months/payments if last_premium_paid_date is provided
+    # Step 4: Calculate all missed dues from commencement date
+    missed_dues = []
+    dues_breakdown = []
+    
+    if commencement_date and payment_mode != 'Monthly':
+        # For non-monthly, calculate each missed due separately
+        due_day = commencement_date.day
+        current_due = calculation_base_date
+        
+        # Get payment interval in months
+        if payment_mode == 'Quarterly':
+            interval_months = 3
+        elif payment_mode == 'HalfYearly':
+            interval_months = 6
+        else:  # Yearly
+            interval_months = 12
+        
+        # Find all dues from calculation_base_date to today
+        while current_due <= today_date:
+            # Calculate grace end date for this due
+            grace_end = current_due + relativedelta(days=29)
+            
+            # Check if this due has passed its grace period
+            if today_date > grace_end:
+                # Calculate months from this due date to today
+                time_from_due = relativedelta(today_date, current_due)
+                months_from_due = time_from_due.months + (time_from_due.years * 12)
+                
+                # Calculate fine for this due
+                due_fine = modal_premium * fine_rate * months_from_due
+                
+                dues_breakdown.append({
+                    'due_date': current_due,
+                    'grace_end': grace_end,
+                    'months_late': months_from_due,
+                    'fine': due_fine,
+                    'premium': modal_premium
+                })
+            
+            # Move to next due date
+            current_due = current_due + relativedelta(months=interval_months)
+    
+    # Step 5: Calculate pending months/payments
     months_pending = 0
     
     if last_premium_paid_date:
@@ -434,7 +508,7 @@ def get_premium_fine_details(due_date, today_date, payment_mode, modal_premium, 
         elif payment_mode == 'Yearly':
             months_pending = time_diff.years
     
-    # Step 5: Calculate next due dates if commencement_date is provided
+    # Step 6: Calculate next due dates if commencement_date is provided
     next_due_dates = []
     if commencement_date:
         # Get the day of month from commencement date
@@ -453,17 +527,59 @@ def get_premium_fine_details(due_date, today_date, payment_mode, modal_premium, 
                 next_due = current_date + relativedelta(years=i+1, day=due_day)
             next_due_dates.append(next_due)
     
-    # Step 6: Check Policy Status and Calculate Fine
+    # Step 7: Check Policy Status and Calculate Fine
     
-    # Case 1: In Grace Period
+    # For non-monthly modes with dues breakdown: Use separate calculation
+    if payment_mode != 'Monthly' and dues_breakdown:
+        # Calculate total fine from all missed dues
+        total_fine = sum(due['fine'] for due in dues_breakdown)
+        total_premium = sum(due['premium'] for due in dues_breakdown)
+        
+        # Check if lapsed
+        lapse_threshold = calculation_base_date + relativedelta(months=5, days=29)
+        
+        if today_date >= lapse_threshold:
+            policy_status = 'Pakka Lapse'
+        else:
+            policy_status = 'Late'
+        
+        return {
+            'fine': total_fine,
+            'total_premium_due': total_premium,
+            'policy_status': policy_status,
+            'months_pending': len(dues_breakdown),
+            'next_due_dates': next_due_dates,
+            'calculation_base_date': calculation_base_date,
+            'dues_breakdown': dues_breakdown
+        }
+    
+    # For non-monthly modes: Grace period is 29 days, fine starts on 30th day
+    if payment_mode != 'Monthly':
+        # Grace period: 29 days (no fine until day 29)
+        # Fine starts from day 30 onwards
+        if days_late <= 29:
+            # Still in grace period (day 0 to day 29)
+            return {
+                'fine': 0.0,
+                'total_premium_due': modal_premium,
+                'policy_status': 'In Grace',
+                'months_pending': months_pending,
+                'next_due_dates': next_due_dates,
+                'calculation_base_date': calculation_base_date,
+                'dues_breakdown': []
+            }
+    
+    # Case 1: In Grace Period (for Monthly mode)
     # If the number of days late is within the grace period, no fine is charged
     if days_late <= grace_period:
         return {
             'fine': 0.0,
+            'total_premium_due': modal_premium,
             'policy_status': 'In Grace',
             'months_pending': months_pending,
             'next_due_dates': next_due_dates,
-            'calculation_base_date': calculation_base_date
+            'calculation_base_date': calculation_base_date,
+            'dues_breakdown': []
         }
     
     # Case 2: Lapsed ("Pakka Lapse")
@@ -471,32 +587,139 @@ def get_premium_fine_details(due_date, today_date, payment_mode, modal_premium, 
     # Using relativedelta to accurately calculate the time difference
     lapse_threshold = calculation_base_date + relativedelta(months=5, days=29)
     
-    # Calculate the number of full, completed months past the calculation_base_date
-    # This is used for both Late and Pakka Lapse status
+    # Calculate the number of months from base date for fine calculation
     time_diff = relativedelta(today_date, calculation_base_date)
-    months_late = time_diff.months + (time_diff.years * 12)
+    months_from_base = time_diff.months + (time_diff.years * 12)
     
-    # Calculate fine: 5% (0.05) of modal_premium per month late
-    fine = modal_premium * 0.05 * months_late
+    # For monthly: Use actual months from base date
+    months_for_fine = months_from_base
+    
+    # Calculate fine based on payment mode
+    fine = modal_premium * fine_rate * months_for_fine
     
     if today_date >= lapse_threshold:
         # Policy has fully lapsed, but fine is still applicable
         return {
             'fine': fine,
+            'total_premium_due': modal_premium,
             'policy_status': 'Pakka Lapse',
             'months_pending': months_pending,
             'next_due_dates': next_due_dates,
-            'calculation_base_date': calculation_base_date
+            'calculation_base_date': calculation_base_date,
+            'dues_breakdown': []
         }
     
     # Case 3: Late (Fine Applicable)
     return {
         'fine': fine,
+        'total_premium_due': modal_premium,
         'policy_status': 'Late',
         'months_pending': months_pending,
         'next_due_dates': next_due_dates,
-        'calculation_base_date': calculation_base_date
+        'calculation_base_date': calculation_base_date,
+        'dues_breakdown': []
     }
+
+def search_policies_by_number(partial_policy_number):
+    """
+    Search for policies matching the partial policy number
+    
+    Args:
+        partial_policy_number (str): Partial policy number to search for
+    
+    Returns:
+        list: List of tuples (display_text, policy_number, full_data_dict)
+    """
+    try:
+        if not partial_policy_number or len(partial_policy_number) < 1:
+            return []
+        
+        supabase = get_supabase_client()
+        
+        # Search for policies starting with the partial number
+        policy_response = supabase.table('policies').select(
+            'policy_number, customer_id, premium_mode, premium_amount, '
+            'date_of_commencement, current_fup_date'
+        ).ilike('policy_number', f'{partial_policy_number}%').limit(20).execute()
+        
+        if not policy_response.data:
+            return []
+        
+        # Get customer names for matching policies
+        customer_ids = [p['customer_id'] for p in policy_response.data]
+        customer_response = supabase.table('customers').select(
+            'customer_id, customer_name'
+        ).in_('customer_id', customer_ids).execute()
+        
+        # Create a mapping of customer_id to customer_name
+        customer_map = {c['customer_id']: c['customer_name'] for c in customer_response.data}
+        
+        # Build results list with display format: "PolicyNumber - CustomerName"
+        results = []
+        for policy in policy_response.data:
+            customer_name = customer_map.get(policy['customer_id'], 'Unknown')
+            display_text = f"{policy['policy_number']} - {customer_name}"
+            
+            policy_data = {
+                'policy_number': policy['policy_number'],
+                'customer_name': customer_name,
+                'payment_mode': policy.get('premium_mode'),
+                'premium_amount': policy.get('premium_amount'),
+                'commencement_date': policy.get('date_of_commencement'),
+                'fup_date': policy.get('current_fup_date')
+            }
+            
+            results.append((display_text, policy['policy_number'], policy_data))
+        
+        return results
+        
+    except Exception as e:
+        st.error(f"❌ Error searching policies: {e}")
+        return []
+
+def get_policy_details_for_calculator(policy_number):
+    """
+    Fetch policy details from database for premium calculator
+    
+    Args:
+        policy_number (str): The policy number to search for
+    
+    Returns:
+        dict: Policy details or None if not found
+    """
+    try:
+        supabase = get_supabase_client()
+        
+        # Get policy details
+        policy_response = supabase.table('policies').select(
+            'policy_number, customer_id, premium_mode, premium_amount, '
+            'date_of_commencement, current_fup_date'
+        ).eq('policy_number', policy_number).execute()
+        
+        if not policy_response.data:
+            return None
+        
+        policy = policy_response.data[0]
+        
+        # Get customer details to potentially get last payment info
+        customer_response = supabase.table('customers').select(
+            'customer_name'
+        ).eq('customer_id', policy['customer_id']).execute()
+        
+        customer_name = customer_response.data[0]['customer_name'] if customer_response.data else 'Unknown'
+        
+        return {
+            'policy_number': policy['policy_number'],
+            'customer_name': customer_name,
+            'payment_mode': policy.get('premium_mode'),
+            'premium_amount': policy.get('premium_amount'),
+            'commencement_date': policy.get('date_of_commencement'),
+            'fup_date': policy.get('current_fup_date')
+        }
+        
+    except Exception as e:
+        st.error(f"❌ Error fetching policy details: {e}")
+        return None
 
 def display_customer_card(customer, card_index=0):
     """Display a customer card with collapsible details"""
@@ -2055,6 +2278,118 @@ def main():
         st.markdown("Calculate fine and policy status for missed premium payments")
         st.markdown("---")
         
+        # Optional: Policy Number Lookup with Autocomplete
+        st.markdown("#### 🔍 Quick Lookup (Optional)")
+        
+        # Initialize session state for policy lookup
+        if 'fetched_policy_data' not in st.session_state:
+            st.session_state.fetched_policy_data = None
+        if 'policy_search_text' not in st.session_state:
+            st.session_state.policy_search_text = ""
+        if 'selected_policy_number' not in st.session_state:
+            st.session_state.selected_policy_number = ""
+        
+        # Create two columns for search input and display
+        search_col1, search_col2 = st.columns([3, 1])
+        
+        with search_col1:
+            # Text input for typing policy number
+            search_input = st.text_input(
+                "Type Policy Number (Optional)",
+                placeholder="Start typing policy number to search...",
+                help="Type to search for policies - matching customer names will appear below. Select from dropdown to auto-fill calculator fields.",
+                key="policy_search_input"
+            )
+        
+        # Search for matching policies when user types
+        matching_policies = []
+        if search_input and len(search_input) >= 1:
+            matching_policies = search_policies_by_number(search_input)
+        
+        # Show dropdown with matching policies if found
+        if matching_policies and len(matching_policies) > 0:
+            with search_col1:
+                # Create dropdown options: ["Select...", "policy1 - name1", "policy2 - name2", ...]
+                dropdown_options = ["Select a policy..."] + [match[0] for match in matching_policies]
+                
+                selected_dropdown = st.selectbox(
+                    f"Found {len(matching_policies)} matching policies:",
+                    options=dropdown_options,
+                    key="policy_dropdown",
+                    label_visibility="visible"
+                )
+                
+                # If user selected a policy from dropdown
+                if selected_dropdown != "Select a policy...":
+                    # Find the selected policy data
+                    for match in matching_policies:
+                        if match[0] == selected_dropdown:
+                            # Extract policy number and data
+                            _, policy_number, policy_data = match
+                            
+                            # Update session state with selected policy
+                            st.session_state.selected_policy_number = policy_number
+                            st.session_state.fetched_policy_data = policy_data
+                            
+                            # Show success message
+                            st.success(f"✅ Selected policy **{policy_number}** for **{policy_data['customer_name']}** - Details auto-filled below")
+                            break
+        
+        # Show clear button if a policy is selected
+        if st.session_state.selected_policy_number:
+            with search_col2:
+                st.markdown("<div style='margin-top: 1.85rem;'></div>", unsafe_allow_html=True)
+                if st.button("🗑️ Clear", type="secondary", use_container_width=True):
+                    st.session_state.selected_policy_number = ""
+                    st.session_state.fetched_policy_data = None
+                    st.rerun()
+        
+        st.markdown("---")
+        
+        # Parse dates from fetched data if available
+        fetched_data = st.session_state.fetched_policy_data
+        
+        # Default values - use fetched data if available
+        from datetime import datetime
+        
+        default_fup_date = date.today() - relativedelta(months=2)
+        default_commencement = date.today() - relativedelta(years=2)
+        default_payment_mode = 'Monthly'
+        default_premium = 5000.0
+        
+        if fetched_data:
+            # Parse FUP date
+            if fetched_data.get('fup_date'):
+                try:
+                    fup_str = fetched_data['fup_date']
+                    for fmt in ['%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y']:
+                        try:
+                            default_fup_date = datetime.strptime(fup_str, fmt).date()
+                            break
+                        except:
+                            continue
+                except:
+                    pass
+            
+            # Parse commencement date
+            if fetched_data.get('commencement_date'):
+                try:
+                    comm_str = fetched_data['commencement_date']
+                    for fmt in ['%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y']:
+                        try:
+                            default_commencement = datetime.strptime(comm_str, fmt).date()
+                            break
+                        except:
+                            continue
+                except:
+                    pass
+            
+            # Set payment mode and premium
+            if fetched_data.get('payment_mode'):
+                default_payment_mode = fetched_data['payment_mode']
+            if fetched_data.get('premium_amount'):
+                default_premium = float(fetched_data['premium_amount'])
+        
         # Create two columns for input
         col1, col2 = st.columns(2)
         
@@ -2063,9 +2398,9 @@ def main():
             
             # Due Date input
             due_date_input = st.date_input(
-                "Premium Due Date *",
-                value=date.today() - relativedelta(months=2),  # Default to 2 months ago
-                help="Select the original due date of the premium"
+                "Premium Due Date (FUP) *",
+                value=default_fup_date,
+                help="Select the original due date of the premium (auto-filled from database if policy found)"
             )
             
             # Today's Date input
@@ -2081,6 +2416,7 @@ def main():
             
             use_commencement = st.checkbox(
                 "Include Commencement Date",
+                value=fetched_data is not None and fetched_data.get('commencement_date') is not None,
                 help="Use this to calculate future due dates based on policy start"
             )
             
@@ -2088,8 +2424,8 @@ def main():
             if use_commencement:
                 commencement_date_input = st.date_input(
                     "Policy Commencement Date",
-                    value=date.today() - relativedelta(years=2),
-                    help="The day from this date will be used for calculating future due dates"
+                    value=default_commencement,
+                    help="The day from this date will be used for calculating future due dates (auto-filled from database if policy found)"
                 )
         
         with col2:
@@ -2099,16 +2435,17 @@ def main():
             payment_mode = st.selectbox(
                 "Payment Mode *",
                 options=['Monthly', 'Quarterly', 'HalfYearly', 'Yearly'],
-                help="Select the payment frequency of the policy"
+                index=['Monthly', 'Quarterly', 'HalfYearly', 'Yearly'].index(default_payment_mode) if default_payment_mode in ['Monthly', 'Quarterly', 'HalfYearly', 'Yearly'] else 0,
+                help="Select the payment frequency of the policy (auto-filled from database if policy found)"
             )
             
             # Modal Premium input
             modal_premium = st.number_input(
                 "Modal Premium Amount (₹) *",
                 min_value=0.0,
-                value=5000.0,
+                value=default_premium,
                 step=100.0,
-                help="Enter the premium amount for the selected payment mode"
+                help="Enter the premium amount for the selected payment mode (auto-filled from database if policy found)"
             )
             
             # Optional: Last Premium Paid Date
@@ -2258,44 +2595,115 @@ def main():
                     # Calculate days since the lapse threshold (5 months 29 days)
                     days_since_lapse = (today_date_input - lapse_date).days
                     
-                    st.error(f"""
-                    ❌ **Policy has Lapsed (Pakka Lapse)**
+                    # Check if we have dues breakdown (for non-monthly with multiple missed dues)
+                    if result.get('dues_breakdown') and len(result['dues_breakdown']) > 0:
+                        # Show detailed breakdown for each missed due
+                        total_premium = result.get('total_premium_due', modal_premium)
+                        total_fine = result['fine']
+                        
+                        st.error(f"""
+                        ❌ **Policy has Lapsed (Pakka Lapse)**
+                        
+                        - Policy lapsed on: **{lapse_date.strftime('%d-%m-%Y')}** (5 months 29 days from base date)
+                        - Days since lapse threshold: **{days_since_lapse} days**
+                        - Days from base date ({calculation_base.strftime('%d-%m-%Y')}): **{days_from_base} days**
+                        - Number of missed dues: **{len(result['dues_breakdown'])} due(s)**
+                        - Total amount for revival: **₹{(total_premium + total_fine):,.2f}**
+                        """)
+                        
+                        # Show detailed breakdown table for each due
+                        import pandas as pd
+                        
+                        st.markdown("#### 📋 Detailed Breakdown by Due Date")
+                        breakdown_data = []
+                        for idx, due in enumerate(result['dues_breakdown'], 1):
+                            breakdown_data.append({
+                                'Due #': f"Due {idx}",
+                                'Due Date': due['due_date'].strftime('%d-%m-%Y'),
+                                'Grace End': due['grace_end'].strftime('%d-%m-%Y'),
+                                'Months Late': due['months_late'],
+                                'Premium': f"₹{due['premium']:,.2f}",
+                                'Fine (0.9%/month)': f"₹{due['fine']:,.2f}",
+                                'Subtotal': f"₹{(due['premium'] + due['fine']):,.2f}"
+                            })
+                        
+                        breakdown_df = pd.DataFrame(breakdown_data)
+                        st.table(breakdown_df)
+                        
+                        # Show total summary
+                        st.markdown("#### 💳 Revival Payment Summary")
+                        summary_df = pd.DataFrame({
+                            'Component': ['Total Premium (All Dues)', 'Total Fine', 'Grand Total for Revival'],
+                            'Amount': [
+                                f"₹{total_premium:,.2f}",
+                                f"₹{total_fine:,.2f}",
+                                f"₹{(total_premium + total_fine):,.2f}"
+                            ]
+                        })
+                        st.table(summary_df)
                     
-                    - Policy lapsed on: **{lapse_date.strftime('%d-%m-%Y')}** (5 months 29 days from base date)
-                    - Days since lapse threshold: **{days_since_lapse} days**
-                    - Days from base date ({calculation_base.strftime('%d-%m-%Y')}): **{days_from_base} days**
-                    - Months late: **{months_late} months**
-                    - Fine calculation: ₹{modal_premium:,.2f} × 0.05 × {months_late} = **₹{result['fine']:,.2f}**
-                    - Total amount for revival: **₹{(modal_premium + result['fine']):,.2f}**
-                    """)
-                    
-                    if result['months_pending'] > 0:
-                        st.info(f"📌 **Pending payments:** {result['months_pending']} payment(s) missed")
-                    
-                    # Additional breakdown for Pakka Lapse
-                    import pandas as pd
-                    
-                    st.markdown("#### 💳 Revival Payment Breakdown")
-                    breakdown_df = pd.DataFrame({
-                        'Component': ['Modal Premium', 'Fine (5% per month)', 'Total for Revival'],
-                        'Amount': [
-                            f"₹{modal_premium:,.2f}",
-                            f"₹{result['fine']:,.2f}",
-                            f"₹{(modal_premium + result['fine']):,.2f}"
-                        ]
-                    })
-                    st.table(breakdown_df)
+                    else:
+                        # Single due calculation (or monthly mode)
+                        # Fine formula varies by payment mode
+                        if payment_mode == 'Monthly':
+                            fine_formula = f"₹{modal_premium:,.2f} × 5% × {months_late} months"
+                        else:
+                            # For non-monthly, show grace end date and actual months from base
+                            grace_end_date = calculation_base + relativedelta(days=29)
+                            fine_formula = f"₹{modal_premium:,.2f} × 0.9% × {months_late} months (Grace ended: {grace_end_date.strftime('%d-%m-%Y')})"
+                        
+                        st.error(f"""
+                        ❌ **Policy has Lapsed (Pakka Lapse)**
+                        
+                        - Policy lapsed on: **{lapse_date.strftime('%d-%m-%Y')}** (5 months 29 days from base date)
+                        - Days since lapse threshold: **{days_since_lapse} days**
+                        - Days from base date ({calculation_base.strftime('%d-%m-%Y')}): **{days_from_base} days**
+                        - Months late: **{months_late} months**
+                        - Fine calculation: {fine_formula} = **₹{result['fine']:,.2f}**
+                        - Total amount for revival: **₹{(modal_premium + result['fine']):,.2f}**
+                        """)
+                        
+                        if result['months_pending'] > 0:
+                            st.info(f"📌 **Pending payments:** {result['months_pending']} payment(s) missed")
+                        
+                        # Additional breakdown for Pakka Lapse
+                        import pandas as pd
+                        
+                        # Fine label varies by payment mode
+                        if payment_mode == 'Monthly':
+                            fine_label = 'Fine (5% per month)'
+                        else:
+                            fine_label = 'Fine (0.9% per month)'
+                        
+                        st.markdown("#### 💳 Revival Payment Breakdown")
+                        breakdown_df = pd.DataFrame({
+                            'Component': ['Modal Premium', fine_label, 'Total for Revival'],
+                            'Amount': [
+                                f"₹{modal_premium:,.2f}",
+                                f"₹{result['fine']:,.2f}",
+                                f"₹{(modal_premium + result['fine']):,.2f}"
+                            ]
+                        })
+                        st.table(breakdown_df)
                 
                 else:  # Late
                     time_diff = relativedelta(today_date_input, calculation_base)
                     months_late = time_diff.months + (time_diff.years * 12)
                     
+                    # Fine formula varies by payment mode
+                    if payment_mode == 'Monthly':
+                        fine_formula = f"₹{modal_premium:,.2f} × 5% × {months_late} months"
+                    else:
+                        # For non-monthly, show grace end date and actual months from base
+                        grace_end_date = calculation_base + relativedelta(days=29)
+                        fine_formula = f"₹{modal_premium:,.2f} × 0.9% × {months_late} months (Grace ended: {grace_end_date.strftime('%d-%m-%Y')})"
+                    
                     st.warning(f"""
                     ⚠️ **Policy is Late - Fine Applicable**
                     
-                    - Grace period expired: **{days_late - grace_period} days ago**
+                    - Grace period expired: **{days_from_base - grace_period} days ago**
                     - Months late: **{months_late} months**
-                    - Fine calculation: ₹{modal_premium:,.2f} × 0.05 × {months_late} = **₹{result['fine']:,.2f}**
+                    - Fine calculation: {fine_formula} = **₹{result['fine']:,.2f}**
                     - Total amount due: **₹{(modal_premium + result['fine']):,.2f}**
                     """)
                     
@@ -2305,9 +2713,15 @@ def main():
                     # Additional breakdown
                     import pandas as pd
                     
+                    # Fine label varies by payment mode
+                    if payment_mode == 'Monthly':
+                        fine_label = 'Fine (5% per month)'
+                    else:
+                        fine_label = 'Fine (0.9% per month)'
+                    
                     st.markdown("#### 💳 Payment Breakdown")
                     breakdown_df = pd.DataFrame({
-                        'Component': ['Modal Premium', 'Fine (5% per month)', 'Total Payable'],
+                        'Component': ['Modal Premium', fine_label, 'Total Payable'],
                         'Amount': [
                             f"₹{modal_premium:,.2f}",
                             f"₹{result['fine']:,.2f}",
