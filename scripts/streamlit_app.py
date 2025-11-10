@@ -1948,6 +1948,90 @@ def show_add_policy_form(customer_id, customer_name):
                 else:
                     st.error(f"❌ {message}")
 
+def get_all_pakka_lapse_customers():
+    """
+    Get all customers with Pakka Lapse policies and calculate their total payable amounts.
+    Returns a list of dictionaries with customer info and lapse details.
+    """
+    from datetime import date
+    
+    supabase = get_supabase_client()
+    
+    # Get all policies with their customer information
+    response = supabase.table('policies')\
+        .select('*, customers(customer_name, full_address)')\
+        .execute()
+    
+    policies = response.data
+    
+    lapsed_customers = []
+    today = date.today()
+    
+    for policy in policies:
+        # Skip if missing required data
+        if not policy.get('current_fup_date') or not policy.get('premium_amount'):
+            continue
+        
+        # Skip if no payment mode
+        payment_mode = policy.get('payment_period')
+        if not payment_mode:
+            continue
+        
+        try:
+            # Parse FUP date
+            fup_date_str = policy['current_fup_date']
+            if isinstance(fup_date_str, str):
+                fup_date = datetime.strptime(fup_date_str, '%Y-%m-%d').date()
+            else:
+                fup_date = fup_date_str
+            
+            # Parse last payment date if available
+            last_payment_date = None
+            if policy.get('last_payment_date'):
+                last_payment_str = policy['last_payment_date']
+                if isinstance(last_payment_str, str):
+                    last_payment_date = datetime.strptime(last_payment_str, '%Y-%m-%d').date()
+                else:
+                    last_payment_date = last_payment_str
+            
+            # Get premium amount
+            premium_amount = float(policy['premium_amount'])
+            
+            # Calculate lapse status
+            result = get_premium_fine_details(
+                due_date=fup_date,
+                today_date=today,
+                payment_mode=payment_mode,
+                modal_premium=premium_amount,
+                last_premium_paid_date=last_payment_date
+            )
+            
+            # Only include if Pakka Lapse
+            if result['policy_status'] == 'Pakka Lapse':
+                total_payable = premium_amount + result['fine']
+                
+                # Get customer info
+                customer = policy.get('customers', {})
+                customer_name = customer.get('customer_name', 'Unknown') if customer else 'Unknown'
+                address = customer.get('full_address', 'N/A') if customer else 'N/A'
+                
+                lapsed_customers.append({
+                    'customer_name': customer_name,
+                    'policy_number': policy['policy_number'],
+                    'premium_amount': premium_amount,
+                    'fine': result['fine'],
+                    'total_payable': total_payable,
+                    'address': address,
+                    'payment_mode': payment_mode,
+                    'fup_date': fup_date.strftime('%d-%m-%Y')
+                })
+        
+        except Exception as e:
+            # Skip policies with calculation errors
+            continue
+    
+    return lapsed_customers
+
 def main():
     """Main Streamlit app"""
     st.set_page_config(
@@ -2034,6 +2118,17 @@ def main():
         button[data-baseweb="tab"]:nth-child(3)[aria-selected="true"] {
             background: linear-gradient(145deg, #b03ac3, #9c27b0) !important;
             box-shadow: 0 6px 12px rgba(156, 39, 176, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.3) !important;
+            transform: translateY(-2px) !important;
+        }
+        
+        /* Fourth tab - Red (Pakka Lapse) */
+        button[data-baseweb="tab"]:nth-child(4) {
+            background: linear-gradient(145deg, #dc3545, #c82333) !important;
+        }
+        
+        button[data-baseweb="tab"]:nth-child(4)[aria-selected="true"] {
+            background: linear-gradient(145deg, #e74c5c, #dc3545) !important;
+            box-shadow: 0 6px 12px rgba(220, 53, 69, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.3) !important;
             transform: translateY(-2px) !important;
         }
         
@@ -2610,7 +2705,7 @@ def main():
         st.stop()
     
     # Create tabs
-    tab1, tab2, tab3 = st.tabs(["🔍 Search Customers", "📍 Filter by Location", "🧮 Premium Calculator"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🔍 Search Customers", "📍 Filter by Location", "🧮 Premium Calculator", "⚠️ Pakka Lapse"])
     
     # TAB 1: Search Customers
     with tab1:
@@ -3275,6 +3370,102 @@ def main():
                         ]
                     })
                     st.table(breakdown_df)
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    # TAB 4: Pakka Lapse Customers
+    with tab4:
+        st.markdown("""
+            <div style='background-color: #ffffff; padding: 20px; border-radius: 10px;'>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<h3 style='color: #000000;'>⚠️ Pakka Lapse Customers</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #000000;'>List of all customers with fully lapsed policies (beyond 5 months 29 days)</p>", unsafe_allow_html=True)
+        st.markdown("---")
+        
+        with st.spinner("🔍 Calculating Pakka Lapse policies..."):
+            lapsed_customers = get_all_pakka_lapse_customers()
+        
+        if lapsed_customers:
+            st.success(f"📊 Found **{len(lapsed_customers)}** Pakka Lapse policies")
+            
+            # Create DataFrame for table display
+            import pandas as pd
+            
+            table_data = []
+            for lapse in lapsed_customers:
+                table_data.append({
+                    'Customer Name': lapse['customer_name'],
+                    'Policy Number': lapse['policy_number'],
+                    'Premium Amount': f"₹{lapse['premium_amount']:,.2f}",
+                    'Fine': f"₹{lapse['fine']:,.2f}",
+                    'Total Payable': f"₹{lapse['total_payable']:,.2f}",
+                    'Address': lapse['address'],
+                    'Payment Mode': lapse['payment_mode'],
+                    'Last FUP Date': lapse['fup_date']
+                })
+            
+            df = pd.DataFrame(table_data)
+            
+            # Add summary metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                total_premium = sum(lapse['premium_amount'] for lapse in lapsed_customers)
+                st.markdown(f"""
+                    <div style='background-color: #ffffff; padding: 15px; border-radius: 8px; border: 2px solid #ff4444; text-align: center;'>
+                        <p style='color: #000000; font-size: 14px; margin: 0;'><strong>Total Premium Due</strong></p>
+                        <p style='color: #ff4444; font-size: 24px; font-weight: bold; margin: 5px 0 0 0;'>₹{total_premium:,.2f}</p>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                total_fine = sum(lapse['fine'] for lapse in lapsed_customers)
+                st.markdown(f"""
+                    <div style='background-color: #ffffff; padding: 15px; border-radius: 8px; border: 2px solid #ff9900; text-align: center;'>
+                        <p style='color: #000000; font-size: 14px; margin: 0;'><strong>Total Fine Amount</strong></p>
+                        <p style='color: #ff9900; font-size: 24px; font-weight: bold; margin: 5px 0 0 0;'>₹{total_fine:,.2f}</p>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            with col3:
+                total_payable = sum(lapse['total_payable'] for lapse in lapsed_customers)
+                st.markdown(f"""
+                    <div style='background-color: #ffffff; padding: 15px; border-radius: 8px; border: 2px solid #cc0000; text-align: center;'>
+                        <p style='color: #000000; font-size: 14px; margin: 0;'><strong>Total Amount Payable</strong></p>
+                        <p style='color: #cc0000; font-size: 24px; font-weight: bold; margin: 5px 0 0 0;'>₹{total_payable:,.2f}</p>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Display the table with mobile-friendly scrolling
+            st.markdown("""
+                <style>
+                .dataframe-container {
+                    overflow-x: auto;
+                    -webkit-overflow-scrolling: touch;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+            
+            st.dataframe(
+                df,
+                use_container_width=True,
+                hide_index=True,
+                height=500
+            )
+            
+            # Download button for CSV
+            csv = df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Pakka Lapse List (CSV)",
+                data=csv,
+                file_name=f"pakka_lapse_customers_{date.today().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        else:
+            st.success("✅ No Pakka Lapse policies found! All policies are in good standing.")
         
         st.markdown("</div>", unsafe_allow_html=True)
 
