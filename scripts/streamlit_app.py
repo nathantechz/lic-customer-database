@@ -799,6 +799,16 @@ def display_customer_card(customer, card_index=0):
             margin-bottom: 1rem;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }}
+        /* Style the expander header (collapsed state) */
+        div[data-testid="stExpander"]:nth-of-type({card_index + 1}) div[data-testid="stExpanderHeader"] {{
+            background: transparent !important;
+            color: #000000 !important;
+        }}
+        /* Style the expander content (expanded state) */
+        div[data-testid="stExpander"]:nth-of-type({card_index + 1}) div[data-testid="stExpanderDetails"] {{
+            background: white !important;
+            border-radius: 8px;
+        }}
         </style>
     """, unsafe_allow_html=True)
     
@@ -829,78 +839,75 @@ def display_customer_card(customer, card_index=0):
                                     else dup['customer1'])
                     match_reasons = ", ".join(dup['match_reasons'])
                     
-                    st.info(f"**{other_customer['customer_name']}** (ID: {other_customer['customer_id']}) - "
-                           f"Match reasons: {match_reasons}")
-                    
-                    # Show basic details for comparison
-                    st.write(f"📞 Phone: {other_customer.get('phone_number', 'N/A')} | "
-                           f"🆔 Aadhaar: {other_customer.get('aadhaar_number', 'N/A')} | "
-                           f"🎂 DOB: {other_customer.get('date_of_birth', 'N/A')}")
-                    st.markdown("---")
+                    st.markdown(f"""
+                        <div style='background-color: #e3f2fd; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #90caf9;'>
+                            <p style='color: #000000; margin: 0;'><strong style='color: #000000;'>{other_customer['customer_name']}</strong> (ID: {other_customer['customer_id']}) - Match reasons: {match_reasons}</p>
+                            <p style='color: #000000; margin: 5px 0 0 0;'>📞 Phone: {other_customer.get('phone_number', 'N/A')} | 🆔 Aadhaar: {other_customer.get('aadhaar_number', 'N/A')} | 🎂 DOB: {other_customer.get('date_of_birth', 'N/A')}</p>
+                        </div>
+                    """, unsafe_allow_html=True)
         
-        # Customer details in compact 3D highlighted sections
+        # Customer details in compact sections with white background
         st.markdown("""
-            <div style='background: linear-gradient(145deg, #ffffff, #f8f9fa); 
+            <div style='background-color: #ffffff; 
                         padding: 1rem; border-radius: 12px; margin-bottom: 0.8rem;
-                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);'>
+                        border: 1px solid #e0e0e0;
+                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);'>
         """, unsafe_allow_html=True)
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🏷️ <strong>Nickname:</strong> {customer.get('nickname') or 'N/A'}</p>", unsafe_allow_html=True)
-            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>📞 <strong>Phone:</strong> {customer.get('phone_number') or 'N/A'}</p>", unsafe_allow_html=True)
-            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>📧 <strong>Email:</strong> {customer.get('email') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>🏷️ <strong style='color: #000000;'>Nickname:</strong> {customer.get('nickname') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>📞 <strong style='color: #000000;'>Phone:</strong> {customer.get('phone_number') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>📧 <strong style='color: #000000;'>Email:</strong> {customer.get('email') or 'N/A'}</p>", unsafe_allow_html=True)
         
         with col2:
-            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>💼 <strong>Occupation:</strong> {customer.get('occupation') or 'N/A'}</p>", unsafe_allow_html=True)
-            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🆔 <strong>Aadhaar:</strong> {customer.get('aadhaar_number') or 'N/A'}</p>", unsafe_allow_html=True)
-            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🎂 <strong>DOB:</strong> {customer.get('date_of_birth') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>💼 <strong style='color: #000000;'>Occupation:</strong> {customer.get('occupation') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>🆔 <strong style='color: #000000;'>Aadhaar:</strong> {customer.get('aadhaar_number') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>🎂 <strong style='color: #000000;'>DOB:</strong> {customer.get('date_of_birth') or 'N/A'}</p>", unsafe_allow_html=True)
         
         with col3:
-            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>📞 <strong>Alt Phone:</strong> {customer.get('alt_phone_number') or 'N/A'}</p>", unsafe_allow_html=True)
-            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🏠 <strong>Address:</strong> {customer.get('full_address') or 'N/A'}</p>", unsafe_allow_html=True)
-            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🔄 <strong>Updated:</strong> {customer.get('last_updated') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>📞 <strong style='color: #000000;'>Alt Phone:</strong> {customer.get('alt_phone_number') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>🏠 <strong style='color: #000000;'>Address:</strong> {customer.get('full_address') or 'N/A'}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>🔄 <strong style='color: #000000;'>Updated:</strong> {customer.get('last_updated') or 'N/A'}</p>", unsafe_allow_html=True)
             
         st.markdown("</div>", unsafe_allow_html=True)
         
-        # Address and location in separate 3D section
-        if customer.get('full_address') or customer.get('google_maps_link'):
+        # Google Maps link in separate section with white background (if available)
+        if customer.get('google_maps_link'):
             st.markdown("""
-                <div style='background: linear-gradient(145deg, #ffffff, #f8f9fa); 
+                <div style='background-color: #ffffff; 
                             padding: 1rem; border-radius: 12px; margin-bottom: 0.8rem;
-                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);'>
+                            border: 1px solid #e0e0e0;
+                            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);'>
             """, unsafe_allow_html=True)
             
-            if customer.get('full_address'):
-                st.markdown(f"🏠 **Address:** {customer.get('full_address')}")
-            
-            if customer.get('google_maps_link'):
-                st.markdown(f"[📍 Open in Google Maps]({customer.get('google_maps_link')})")
+            st.markdown(f"<p style='color: #000000;'><a href='{customer.get('google_maps_link')}' style='color: #0066cc;'>📍 Open in Google Maps</a></p>", unsafe_allow_html=True)
             
             st.markdown("</div>", unsafe_allow_html=True)
         
         # Notes (if any)
         if customer.get('notes'):
             st.markdown("""
-                <div style='background: linear-gradient(145deg, #fffef0, #faf9e8); 
+                <div style='background-color: #fffef0; 
                             padding: 1rem; border-radius: 12px; margin-bottom: 0.8rem;
-                            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);'>
+                            border: 1px solid #f0e68c;
+                            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);'>
             """, unsafe_allow_html=True)
-            st.markdown(f"📝 **Notes:** {customer.get('notes')}")
+            st.markdown(f"<p style='color: #000000;'>📝 <strong style='color: #000000;'>Notes:</strong> {customer.get('notes')}</p>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
         
         # Enhanced Policies section with nested expandable - each policy is collapsible
         if customer['policies']:
             st.markdown("---")
-            st.markdown(f"### 📋 Policies ({len(customer['policies'])})")
+            st.markdown(f"<h3 style='color: #000000;'>📋 Policies ({len(customer['policies'])})</h3>", unsafe_allow_html=True)
             
             for i, policy in enumerate(customer['policies']):
                     # Policy header with edit button
                     header_col, edit_col = st.columns([4, 1])
                     
                     with header_col:
-                        st.subheader(f"Policy #{i+1}: {policy['policy_number']}")
+                        st.markdown(f"<h4 style='color: #000000;'>Policy #{i+1}: {policy['policy_number']}</h4>", unsafe_allow_html=True)
                     
                     # Define keys consistently
                     edit_button_key = f"btn_edit_policy_{policy['policy_number']}"
@@ -915,30 +922,32 @@ def display_customer_card(customer, card_index=0):
                     if st.session_state.get(edit_mode_key, False):
                         display_policy_edit_form(policy)
                     else:
-                        # Display mode - Policy information in compact 3D sections
+                        # Display mode - Policy information in compact sections with white backgrounds
                         
-                        # Basic Information Section (3D highlight)
+                        # Basic Information Section (white background)
                         st.markdown("""
-                            <div style='background: linear-gradient(145deg, #e8f4fd, #d6ebf5); 
+                            <div style='background-color: #e8f4fd; 
                                         padding: 0.8rem; border-radius: 10px; margin-bottom: 0.6rem;
-                                        box-shadow: 0 3px 10px rgba(102, 126, 234, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6);'>
+                                        border: 1px solid #b3d9f2;
+                                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);'>
                         """, unsafe_allow_html=True)
                         
                         col1, col2 = st.columns(2)
                         with col1:
-                            st.markdown(f"📝 **Plan Name:** {policy.get('plan_name', 'N/A')}")
-                            st.markdown(f"🏢 **Agent Code:** {policy.get('agent_code', 'N/A')}")
+                            st.markdown(f"<p style='color: #000000; margin: 0;'>📝 <strong style='color: #000000;'>Plan Name:</strong> {policy.get('plan_name', 'N/A')}</p>", unsafe_allow_html=True)
+                            st.markdown(f"<p style='color: #000000; margin: 0;'>🏢 <strong style='color: #000000;'>Agent Code:</strong> {policy.get('agent_code', 'N/A')}</p>", unsafe_allow_html=True)
                         with col2:
                             payment_period = policy.get('payment_period', 'N/A')
-                            st.markdown(f"📆 **Payment Term:** {payment_period}")
+                            st.markdown(f"<p style='color: #000000; margin: 0;'>📆 <strong style='color: #000000;'>Payment Term:</strong> {payment_period}</p>", unsafe_allow_html=True)
                         
                         st.markdown("</div>", unsafe_allow_html=True)
                         
-                        # Dates Section (3D highlight)
+                        # Dates Section (light yellow background)
                         st.markdown("""
-                            <div style='background: linear-gradient(145deg, #fef5e7, #fdebd0); 
+                            <div style='background-color: #fef5e7; 
                                         padding: 0.8rem; border-radius: 10px; margin-bottom: 0.6rem;
-                                        box-shadow: 0 3px 10px rgba(243, 156, 18, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6);'>
+                                        border: 1px solid #f9e79f;
+                                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);'>
                         """, unsafe_allow_html=True)
                         
                         col1, col2, col3 = st.columns(3)
@@ -946,35 +955,36 @@ def display_customer_card(customer, card_index=0):
                         with col1:
                             commencement = policy.get('date_of_commencement', 'N/A')
                             if commencement and commencement != 'N/A' and str(commencement).strip():
-                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🗓️ <strong>Commencement:</strong> {commencement}</p>", unsafe_allow_html=True)
+                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>🗓️ <strong>Commencement:</strong> {commencement}</p>", unsafe_allow_html=True)
                             else:
-                                st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🗓️ <strong>Commencement:</strong> 📄 <em>Premium Due only</em></p>", unsafe_allow_html=True)
+                                st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>🗓️ <strong>Commencement:</strong> 📄 <em>Premium Due only</em></p>", unsafe_allow_html=True)
                         
                         with col2:
                             fup_date = policy.get('current_fup_date', 'N/A')
                             if fup_date and fup_date != 'N/A' and str(fup_date).strip():
-                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>📅 <strong>FUP (Next Due):</strong> {fup_date}</p>", unsafe_allow_html=True)
+                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>📅 <strong>FUP (Next Due):</strong> {fup_date}</p>", unsafe_allow_html=True)
                             else:
                                 if policy.get('latest_premium') and policy['latest_premium'].get('due_date'):
                                     due_date = policy['latest_premium']['due_date']
-                                    st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>📅 <strong>Latest Due:</strong> {due_date}</p>", unsafe_allow_html=True)
+                                    st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>📅 <strong>Latest Due:</strong> {due_date}</p>", unsafe_allow_html=True)
                                 else:
-                                    st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>📅 <strong>FUP:</strong> 💳 <em>Premium Due only</em></p>", unsafe_allow_html=True)
+                                    st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>📅 <strong>FUP:</strong> 💳 <em>Premium Due only</em></p>", unsafe_allow_html=True)
                         
                         with col3:
                             last_payment = policy.get('last_payment_date', 'N/A')
                             if last_payment and last_payment != 'N/A' and str(last_payment).strip():
-                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>💳 <strong>Last Payment:</strong> {last_payment}</p>", unsafe_allow_html=True)
+                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>💳 <strong>Last Payment:</strong> {last_payment}</p>", unsafe_allow_html=True)
                             else:
-                                st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>💳 <strong>Last Payment:</strong> Not recorded</p>", unsafe_allow_html=True)
+                                st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>💳 <strong>Last Payment:</strong> Not recorded</p>", unsafe_allow_html=True)
                         
                         st.markdown("</div>", unsafe_allow_html=True)
                         
-                        # Financial Information Section (3D highlight)
+                        # Financial Information Section (light green background)
                         st.markdown("""
-                            <div style='background: linear-gradient(145deg, #e8f8f5, #d0f0e8); 
+                            <div style='background-color: #e8f8f5; 
                                         padding: 0.8rem; border-radius: 10px; margin-bottom: 0.6rem;
-                                        box-shadow: 0 3px 10px rgba(46, 204, 113, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6);'>
+                                        border: 1px solid #a9dfbf;
+                                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);'>
                         """, unsafe_allow_html=True)
                         
                         col1, col2 = st.columns(2)
@@ -982,15 +992,15 @@ def display_customer_card(customer, card_index=0):
                         with col1:
                             premium_amount = policy.get('premium_amount')
                             if premium_amount:
-                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>💰 <strong>Premium Amount:</strong> ₹{premium_amount:,.2f}</p>", unsafe_allow_html=True)
+                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>💰 <strong>Premium Amount:</strong> ₹{premium_amount:,.2f}</p>", unsafe_allow_html=True)
                             else:
-                                st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>💰 <strong>Premium Amount:</strong> Not Available</p>", unsafe_allow_html=True)
+                                st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>💰 <strong>Premium Amount:</strong> Not Available</p>", unsafe_allow_html=True)
                             
                             sum_assured = policy.get('sum_assured')
                             if sum_assured:
-                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🏦 <strong>Sum Assured:</strong> ₹{sum_assured:,.2f}</p>", unsafe_allow_html=True)
+                                st.markdown(f"<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>🏦 <strong>Sum Assured:</strong> ₹{sum_assured:,.2f}</p>", unsafe_allow_html=True)
                             else:
-                                st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4;'>🏦 <strong>Sum Assured:</strong> Not Available</p>", unsafe_allow_html=True)
+                                st.markdown("<p style='margin: 0; padding: 2px 0; line-height: 1.4; color: #000000;'>🏦 <strong>Sum Assured:</strong> Not Available</p>", unsafe_allow_html=True)
                         
                         with col2:
                             # Show due count prominently if available
@@ -1947,9 +1957,333 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    # Add mobile-friendly custom CSS with 3D effects
+    # Add mobile-friendly custom CSS with high contrast and fixed colors
     st.markdown("""
         <style>
+        /* Global text contrast fix - ensure all text is visible with high contrast */
+        body, p, span, div, label, h1, h2, h3, h4, h5, h6, strong, em, a {
+            color: #000000 !important;
+        }
+        
+        /* Main content area - white background */
+        .main {
+            background-color: #ffffff !important;
+        }
+        
+        .main .block-container {
+            background-color: #ffffff !important;
+        }
+        
+        /* Ensure all paragraph and text elements are black */
+        .main p, .main span, .main div:not([data-testid="stMarkdownContainer"]) {
+            color: #000000 !important;
+        }
+        
+        /* Fix markdown text */
+        div[data-testid="stMarkdownContainer"] p,
+        div[data-testid="stMarkdownContainer"] span,
+        div[data-testid="stMarkdownContainer"] div {
+            color: #000000 !important;
+        }
+        
+        /* Labels for inputs */
+        label, .stTextInput label, .stSelectbox label, .stDateInput label, .stNumberInput label {
+            color: #000000 !important;
+            background-color: transparent !important;
+        }
+        
+        /* Fix tab text color and backgrounds - 3D style with different colors */
+        button[data-baseweb="tab"] {
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            border-radius: 12px 12px 0 0 !important;
+            padding: 12px 24px !important;
+            margin-right: 8px !important;
+            border: none !important;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2), inset 0 -2px 4px rgba(0, 0, 0, 0.1) !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        /* First tab - Blue */
+        button[data-baseweb="tab"]:nth-child(1) {
+            background: linear-gradient(145deg, #4a90e2, #357abd) !important;
+        }
+        
+        button[data-baseweb="tab"]:nth-child(1)[aria-selected="true"] {
+            background: linear-gradient(145deg, #5fa3f5, #4a90e2) !important;
+            box-shadow: 0 6px 12px rgba(74, 144, 226, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.3) !important;
+            transform: translateY(-2px) !important;
+        }
+        
+        /* Second tab - Green */
+        button[data-baseweb="tab"]:nth-child(2) {
+            background: linear-gradient(145deg, #52c41a, #3a9613) !important;
+        }
+        
+        button[data-baseweb="tab"]:nth-child(2)[aria-selected="true"] {
+            background: linear-gradient(145deg, #6dd12d, #52c41a) !important;
+            box-shadow: 0 6px 12px rgba(82, 196, 26, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.3) !important;
+            transform: translateY(-2px) !important;
+        }
+        
+        /* Third tab - Purple */
+        button[data-baseweb="tab"]:nth-child(3) {
+            background: linear-gradient(145deg, #9c27b0, #7b1fa2) !important;
+        }
+        
+        button[data-baseweb="tab"]:nth-child(3)[aria-selected="true"] {
+            background: linear-gradient(145deg, #b03ac3, #9c27b0) !important;
+            box-shadow: 0 6px 12px rgba(156, 39, 176, 0.4), inset 0 1px 3px rgba(255, 255, 255, 0.3) !important;
+            transform: translateY(-2px) !important;
+        }
+        
+        button[data-baseweb="tab"]:hover {
+            transform: translateY(-1px) !important;
+            box-shadow: 0 5px 8px rgba(0, 0, 0, 0.25) !important;
+        }
+        
+        button[data-baseweb="tab"]:active {
+            transform: translateY(0px) !important;
+        }
+        
+        /* Tab panels - ensure white background for content */
+        div[role="tabpanel"] {
+            background-color: #ffffff !important;
+            padding: 20px !important;
+        }
+        
+        div[role="tabpanel"] * {
+            color: #000000 !important;
+        }
+        
+        /* Fix button backgrounds and text - NO COLOR CHANGE */
+        .stButton > button {
+            color: #ffffff !important;
+            background-color: #000000 !important;
+            border: 2px solid #000000 !important;
+        }
+        
+        .stButton > button:hover,
+        .stButton > button:active,
+        .stButton > button:focus {
+            color: #ffffff !important;
+            background-color: #000000 !important;
+            border: 2px solid #000000 !important;
+        }
+        
+        .stButton > button[kind="secondary"] {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            border: 2px solid #000000 !important;
+        }
+        
+        .stButton > button[kind="secondary"]:hover,
+        .stButton > button[kind="secondary"]:active,
+        .stButton > button[kind="secondary"]:focus {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            border: 2px solid #000000 !important;
+        }
+        
+        .stButton > button[kind="primary"] {
+            color: #ffffff !important;
+            background-color: #000000 !important;
+            border: 2px solid #000000 !important;
+        }
+        
+        .stButton > button[kind="primary"]:hover,
+        .stButton > button[kind="primary"]:active,
+        .stButton > button[kind="primary"]:focus {
+            color: #ffffff !important;
+            background-color: #000000 !important;
+            border: 2px solid #000000 !important;
+        }
+        
+        /* Fix st.success, st.warning, st.info, st.error backgrounds and text */
+        div[data-testid="stAlert"] {
+            background-color: #f0f0f0 !important;
+            color: #000000 !important;
+            border: 2px solid #000000 !important;
+        }
+        
+        div[data-testid="stAlert"] p, 
+        div[data-testid="stAlert"] div,
+        div[data-testid="stAlert"] strong {
+            color: #000000 !important;
+        }
+        
+        /* Ensure expander has fixed colors - NO COLOR CHANGE */
+        div[data-testid="stExpander"] {
+            background-color: #ffffff !important;
+            border: 1px solid #e0e0e0 !important;
+        }
+        
+        div[data-testid="stExpanderHeader"] {
+            background-color: #f8f9fa !important;
+            color: #000000 !important;
+        }
+        
+        div[data-testid="stExpanderHeader"]:hover,
+        div[data-testid="stExpanderHeader"]:active,
+        div[data-testid="stExpanderHeader"]:focus {
+            background-color: #f8f9fa !important;
+            color: #000000 !important;
+        }
+        
+        div[data-testid="stExpanderDetails"] {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+        }
+        
+        /* Text inputs - high contrast */
+        .stTextInput input, .stTextArea textarea {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            border: 2px solid #000000 !important;
+        }
+        
+        .stTextInput input:focus, 
+        .stTextArea textarea:focus {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            border: 2px solid #000000 !important;
+            outline: none !important;
+        }
+        
+        /* Selectbox / Dropdown - fix black on black issue */
+        .stSelectbox, div[data-baseweb="select"] {
+            background-color: #ffffff !important;
+        }
+        
+        .stSelectbox > div, 
+        div[data-baseweb="select"] > div {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+        }
+        
+        .stSelectbox select,
+        div[data-baseweb="select"] select {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            border: 2px solid #000000 !important;
+        }
+        
+        .stSelectbox label {
+            color: #000000 !important;
+            background-color: transparent !important;
+        }
+        
+        /* Dropdown menu items */
+        ul[role="listbox"] {
+            background-color: #ffffff !important;
+        }
+        
+        ul[role="listbox"] li {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+        }
+        
+        ul[role="listbox"] li:hover {
+            background-color: #f0f0f0 !important;
+            color: #000000 !important;
+        }
+        
+        .stSelectbox select:focus,
+        div[data-baseweb="select"]:focus {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            border: 2px solid #000000 !important;
+            outline: none !important;
+        }
+        
+        /* Sidebar - high contrast */
+        section[data-testid="stSidebar"] {
+            background-color: #f8f9fa !important;
+        }
+        
+        section[data-testid="stSidebar"] * {
+            color: #000000 !important;
+        }
+        
+        /* DataFrames and Tables - ensure visibility */
+        div[data-testid="stDataFrame"], 
+        div[data-testid="stTable"] {
+            background-color: #ffffff !important;
+        }
+        
+        div[data-testid="stDataFrame"] table,
+        div[data-testid="stTable"] table {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+        }
+        
+        div[data-testid="stDataFrame"] th,
+        div[data-testid="stTable"] th {
+            color: #000000 !important;
+            background-color: #f0f0f0 !important;
+            font-weight: bold !important;
+        }
+        
+        div[data-testid="stDataFrame"] td,
+        div[data-testid="stTable"] td {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+        }
+        
+        /* Date input styling */
+        div[data-testid="stDateInput"] input {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            border: 2px solid #000000 !important;
+        }
+        
+        div[data-testid="stDateInput"] label {
+            color: #000000 !important;
+            background-color: transparent !important;
+        }
+        
+        /* Number input styling */
+        div[data-testid="stNumberInput"] input {
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            border: 2px solid #000000 !important;
+        }
+        
+        div[data-testid="stNumberInput"] label {
+            color: #000000 !important;
+            background-color: transparent !important;
+        }
+        
+        /* Radio buttons */
+        div[data-testid="stRadio"] label {
+            color: #000000 !important;
+        }
+        
+        /* Checkbox */
+        div[data-testid="stCheckbox"] label {
+            color: #000000 !important;
+        }
+        
+        /* Slider */
+        div[data-testid="stSlider"] label {
+            color: #000000 !important;
+        }
+        
+        /* File uploader */
+        div[data-testid="stFileUploader"] label {
+            color: #000000 !important;
+        }
+        
+        /* Form labels */
+        .stForm label {
+            color: #000000 !important;
+        }
+        
+        /* Help text */
+        .stTextInput small, .stSelectbox small, .stNumberInput small, .stDateInput small {
+            color: #000000 !important;
+        }
+        
         /* Mobile responsive adjustments */
         @media (max-width: 768px) {
             .main .block-container {
@@ -2159,12 +2493,32 @@ def main():
                     total_agents = len(agent_list)
                     total_customers = len(set(policy['customer_id'] for policy in policies_data))
                     
-                    st.metric("Total Agents", total_agents)
-                    st.metric("Total Customers", total_customers)
+                    # Custom styled metrics with white background
+                    st.markdown(f"""
+                        <div style='background-color: #ffffff; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #e0e0e0;'>
+                            <p style='color: #000000; font-size: 14px; margin: 0;'><strong>Total Agents</strong></p>
+                            <p style='color: #000000; font-size: 24px; font-weight: bold; margin: 0;'>{total_agents}</p>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.markdown(f"""
+                        <div style='background-color: #ffffff; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #e0e0e0;'>
+                            <p style='color: #000000; font-size: 14px; margin: 0;'><strong>Total Customers</strong></p>
+                            <p style='color: #000000; font-size: 24px; font-weight: bold; margin: 0;'>{total_customers}</p>
+                        </div>
+                    """, unsafe_allow_html=True)
                     
                     with st.expander(f"📋 View Customer Count by Agent ({total_agents} agents)"):
+                        # Add background styling for the expander content
+                        st.markdown("""
+                            <style>
+                            div[data-testid="stExpander"] div[role="region"] {
+                                background-color: white !important;
+                            }
+                            </style>
+                        """, unsafe_allow_html=True)
                         for agent in agent_list:
-                            st.text(f"🔹 {agent['agent_code']}: {agent['customer_count']} customer(s)")
+                            st.markdown(f"<p style='color: #000000; background-color: white; padding: 5px; margin: 2px 0;'>🔹 {agent['agent_code']}: {agent['customer_count']} customer(s)</p>", unsafe_allow_html=True)
                 else:
                     st.info("No policies found")
                     
@@ -2381,8 +2735,12 @@ def main():
     
     # TAB 2: Filter by Location
     with tab2:
-        st.markdown("### 📍 View Policies by Location")
-        st.markdown("Select an address to view all policies for customers at that location")
+        st.markdown("""
+            <div style='background-color: #ffffff; padding: 20px; border-radius: 10px;'>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<h3 style='color: #000000;'>📍 View Policies by Location</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #000000;'>Select an address to view all policies for customers at that location</p>", unsafe_allow_html=True)
         st.markdown("---")
         
         # Get all addresses for dropdown
@@ -2428,15 +2786,21 @@ def main():
                     st.info(f"ℹ️ No policies found for address: {selected_address}")
         else:
             st.warning("⚠️ No addresses found in the database")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
     
     # TAB 3: Premium Calculator
     with tab3:
-        st.markdown("### 🧮 Premium Fine Calculator")
-        st.markdown("Calculate fine and policy status for missed premium payments")
+        st.markdown("""
+            <div style='background-color: #ffffff; padding: 20px; border-radius: 10px;'>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<h3 style='color: #000000;'>🧮 Premium Fine Calculator</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #000000;'>Calculate fine and policy status for missed premium payments</p>", unsafe_allow_html=True)
         st.markdown("---")
         
         # Optional: Policy Number Lookup with Autocomplete
-        st.markdown("#### 🔍 Quick Lookup (Optional)")
+        st.markdown("<h4 style='color: #000000;'>🔍 Quick Lookup (Optional)</h4>", unsafe_allow_html=True)
         
         # Initialize session state for policy lookup
         if 'fetched_policy_data' not in st.session_state:
@@ -2901,7 +3265,7 @@ def main():
                     else:
                         fine_label = 'Fine (0.9% per month)'
                     
-                    st.markdown("#### 💳 Payment Breakdown")
+                    st.markdown("<h4 style='color: #000000;'>💳 Payment Breakdown</h4>", unsafe_allow_html=True)
                     breakdown_df = pd.DataFrame({
                         'Component': ['Modal Premium', fine_label, 'Total Payable'],
                         'Amount': [
@@ -2911,6 +3275,8 @@ def main():
                         ]
                     })
                     st.table(breakdown_df)
+        
+        st.markdown("</div>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
